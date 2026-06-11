@@ -1,21 +1,11 @@
 #pragma once
 
-#include "vec3.h"
-#include "mat3.h"
-#include "kd_tree.h"
+#include "core/geometry_types.h"
+#include "core/mat3.h"
+#include "core/kd_tree.h"
 
 #include <cstddef>
 #include <vector>
-
-struct OrientedPoint {
-    Vec3 p;
-    Vec3 n;
-
-    // We save the lambda values from the eigendecomposition because they are useful for later processing
-    double lambda0;
-    double lambda1;
-    double lambda2;
-};
 
 enum class NormalEstimationMethod {
     PCA,
@@ -23,6 +13,7 @@ enum class NormalEstimationMethod {
 
 // Function declarations
 inline std::vector<OrientedPoint> estimate_normals_PCA(const std::vector<Vec3>& points, int k = 20);
+inline OrientedPointCloud estimate_oriented_points_PCA(const PointCloud& point_cloud, int k = 20);
 
 // Driver function
 inline std::vector<OrientedPoint> estimate_normals(const std::vector<Vec3>& points, NormalEstimationMethod method = NormalEstimationMethod::PCA) {
@@ -34,6 +25,21 @@ inline std::vector<OrientedPoint> estimate_normals(const std::vector<Vec3>& poin
         default: 
             oriented_points = estimate_normals_PCA(points);
     }
+    return oriented_points;
+}
+
+inline OrientedPointCloud estimate_oriented_points(const PointCloud& point_cloud, NormalEstimationMethod method = NormalEstimationMethod::PCA, int k = 20) {
+    OrientedPointCloud oriented_points;
+    oriented_points.frame = point_cloud.frame;
+
+    switch (method) {
+        case NormalEstimationMethod::PCA:
+            oriented_points.points = estimate_normals_PCA(point_cloud.points, k);
+            break;
+        default:
+            oriented_points.points = estimate_normals_PCA(point_cloud.points, k);
+    }
+
     return oriented_points;
 }
 
@@ -88,5 +94,12 @@ inline std::vector<OrientedPoint> estimate_normals_PCA(const std::vector<Vec3>& 
         });
     }
 
+    return oriented_points;
+}
+
+inline OrientedPointCloud estimate_oriented_points_PCA(const PointCloud& point_cloud, int k) {
+    OrientedPointCloud oriented_points;
+    oriented_points.frame = point_cloud.frame;
+    oriented_points.points = estimate_normals_PCA(point_cloud.points, k);
     return oriented_points;
 }

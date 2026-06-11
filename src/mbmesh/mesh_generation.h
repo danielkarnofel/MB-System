@@ -1,45 +1,37 @@
+#pragma once
+
+#include "core/geometry_types.h"
+
 #include <vector>
-#include "vec3.h"
-
-struct Vertex {
-    Vec3 position;
-    Vec3 normal;
-};
-
-struct Mesh {
-    std::vector<Vertex> vertices;
-    std::vector<unsigned int> indices;
-};
-
-struct OrientedPoint {
-    Vec3 p;
-    Vec3 n;
-};
-
-struct ScalarField {
-    unsigned int width;
-    unsigned int depth;
-    unsigned int height;
-    std::vector<std::vector<std::vector<double>>> values;
-
-    // TODO: getters/setters
-};
 
 enum class MeshGenerationMethod {
-    Delauney,
+    SwathTopology,
+    XYDelaunay,
     AlphaShape,
     BallPivoting,
     Poisson,
 };
 
-Mesh generate_mesh_Delauney(std::vector<Vec3>& points) {
-    // TODO
+inline Mesh generate_mesh_swath_topology(const PointCloud& point_cloud) {
+    Mesh mesh;
+    mesh.frame = point_cloud.frame;
+    return mesh;
 }
 
-Mesh generate_mesh_Poisson(std::vector<OrientedPoint>& oriented_points) {
-    // TODO
+inline Mesh generate_mesh_xy_delaunay(const PointCloud& point_cloud) {
+    Mesh mesh;
+    mesh.frame = point_cloud.frame;
+    return mesh;
 }
 
-Mesh marching_cubes(std::vector<double>, unsigned int width, unsigned int depth, unsigned int height) {
-    // TODO
+inline Mesh generate_mesh_poisson(const OrientedPointCloud& oriented_points) {
+    Mesh mesh;
+    mesh.frame = oriented_points.frame;
+    return mesh;
+}
+
+inline Mesh marching_cubes(const ScalarField& field) {
+    Mesh mesh;
+    mesh.frame = field.frame;
+    return mesh;
 }

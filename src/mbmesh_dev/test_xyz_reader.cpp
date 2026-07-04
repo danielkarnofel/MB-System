@@ -1,4 +1,4 @@
-#include "io/xyz_file_reader.h"
+#include "io/xyz_reader.h"
 
 #include <cmath>
 #include <cstdio>

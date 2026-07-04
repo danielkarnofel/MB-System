@@ -1,4 +1,4 @@
-#include "io/xyz_file_reader.h"
+#include "io/xyz_reader.h"
 
 #include <cmath>
 #include <cctype>
@@ -14,7 +14,7 @@ void set_error(std::string *error_message, const std::string &message) {
     }
 }
 
-[[nodiscard]] bool is_blank_or_comment(const std::string &line) {
+bool is_blank_or_comment(const std::string &line) {
     for (char c : line) {
         if (!std::isspace(static_cast<unsigned char>(c))) {
             return c == '#';
@@ -23,7 +23,7 @@ void set_error(std::string *error_message, const std::string &message) {
     return true;
 }
 
-[[nodiscard]] std::string normalize_separators(std::string line) {
+std::string normalize_separators(std::string line) {
     for (char &c : line) {
         if (c == ',') {
             c = ' ';

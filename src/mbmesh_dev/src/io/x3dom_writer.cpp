@@ -187,6 +187,88 @@ void write_normal_lines(std::ostream &output,
            << "    </shape>\n";
 }
 
+bool validate_mesh(const Mesh &mesh, std::string *error_message) {
+    if (mesh.vertices.empty()) {
+        set_error(error_message, "Mesh has no vertices");
+        return false;
+    }
+
+    if (mesh.indices.empty()) {
+        set_error(error_message, "Mesh has no triangle indices");
+        return false;
+    }
+
+    if (mesh.indices.size() % 3 != 0) {
+        set_error(error_message, "Mesh index count is not divisible by 3");
+        return false;
+    }
+
+    for (const unsigned int index : mesh.indices) {
+        if (index >= mesh.vertices.size()) {
+            set_error(error_message, "Mesh contains an out-of-range vertex index");
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void write_mesh_shape(std::ostream &output,
+                      const Mesh &mesh,
+                      const X3DomWriterOptions &options) {
+    const std::size_t triangle_count = mesh.indices.size() / 3;
+    const std::size_t count = std::min(options.max_triangles, triangle_count);
+    if (count == 0) {
+        return;
+    }
+
+    output << "    <shape>\n"
+           << "      <appearance>\n"
+           << "        <material diffuseColor=\"";
+    write_color(output, options.mesh_color);
+    output << "\" transparency=\"" << options.mesh_transparency << "\"></material>\n"
+           << "      </appearance>\n"
+           << "      <indexedFaceSet solid=\"false\" coordIndex=\"";
+
+    for (std::size_t i = 0; i < count; i++) {
+        const std::size_t index = i * 3;
+        output << mesh.indices[index] << " "
+               << mesh.indices[index + 1] << " "
+               << mesh.indices[index + 2] << " -1";
+        if (i + 1 < count) {
+            output << " ";
+        }
+    }
+
+    output << "\">\n"
+           << "        <coordinate point=\"";
+
+    for (std::size_t i = 0; i < mesh.vertices.size(); i++) {
+        const Vec3 &vertex = mesh.vertices[i];
+        output << vertex.x << " " << vertex.y << " " << vertex.z;
+        if (i + 1 < mesh.vertices.size()) {
+            output << ", ";
+        }
+    }
+
+    output << "\"></coordinate>\n";
+
+    if (mesh.normals.size() == mesh.vertices.size()) {
+        output << "        <normal vector=\"";
+        for (std::size_t i = 0; i < mesh.normals.size(); i++) {
+            const Vec3 &normal = mesh.normals[i];
+            output << normal.x << " " << normal.y << " " << normal.z;
+            if (i + 1 < mesh.normals.size()) {
+                output << ", ";
+            }
+        }
+        output << "\"></normal>\n";
+    }
+
+    output << "      </indexedFaceSet>\n"
+           << "    </shape>\n";
+}
+
 } // namespace
 
 bool write_pointcloud_x3dom_file(const char *filename,
@@ -222,6 +304,55 @@ bool write_oriented_pointcloud_x3dom_file(const char *filename,
     }
 
     write_page_begin(output, options.title);
+    write_oriented_point_set(output, oriented_pointcloud, options);
+    write_normal_lines(output, oriented_pointcloud, options);
+    write_page_end(output);
+    return true;
+}
+
+bool write_mesh_x3dom_file(const char *filename,
+                           const Mesh &mesh,
+                           const X3DomWriterOptions &options,
+                           std::string *error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+
+    if (!validate_mesh(mesh, error_message)) {
+        return false;
+    }
+
+    std::ofstream output;
+    if (!open_output(filename, output, error_message)) {
+        return false;
+    }
+
+    write_page_begin(output, options.title);
+    write_mesh_shape(output, mesh, options);
+    write_page_end(output);
+    return true;
+}
+
+bool write_oriented_pointcloud_mesh_x3dom_file(const char *filename,
+                                               const OrientedPointCloud &oriented_pointcloud,
+                                               const Mesh &mesh,
+                                               const X3DomWriterOptions &options,
+                                               std::string *error_message) {
+    if (error_message != nullptr) {
+        error_message->clear();
+    }
+
+    if (!validate_mesh(mesh, error_message)) {
+        return false;
+    }
+
+    std::ofstream output;
+    if (!open_output(filename, output, error_message)) {
+        return false;
+    }
+
+    write_page_begin(output, options.title);
+    write_mesh_shape(output, mesh, options);
     write_oriented_point_set(output, oriented_pointcloud, options);
     write_normal_lines(output, oriented_pointcloud, options);
     write_page_end(output);

@@ -55,6 +55,8 @@ std::vector<OrientedPoint> estimate_normals_pca(const std::vector<Vec3> &points,
 std::vector<OrientedPoint> estimate_normals(const std::vector<Vec3> &points, int k, NormalEstimationMethod method) {
     switch (method) {
     case NormalEstimationMethod::PCA:
+        return estimate_normals_pca(points, k);
+        break;
     default:
         return estimate_normals_pca(points, k);
     }
@@ -69,6 +71,8 @@ OrientedPointCloud estimate_oriented_points_pca(const PointCloud &pointcloud, in
 OrientedPointCloud estimate_oriented_points(const PointCloud &pointcloud, int k, NormalEstimationMethod method) {
     switch (method) {
     case NormalEstimationMethod::PCA:
+        return estimate_oriented_points_pca(pointcloud, k);
+        break;
     default:
         return estimate_oriented_points_pca(pointcloud, k);
     }

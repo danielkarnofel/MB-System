@@ -34,24 +34,3 @@ double noisy_heightfield(double x, double y) {
     const double fine_noise = 0.12 * perlin_noise(x * 0.55, y * 0.55, 7.0);
     return rippled_heightfield(x, y) + broad_noise + fine_noise;
 }
-
-PointCloud generate_heightfield_pointcloud(HeightFunction height,
-                                           double min_x,
-                                           double max_x,
-                                           double min_y,
-                                           double max_y,
-                                           double interval) {
-    PointCloud pointcloud;
-    if (height == nullptr || interval <= 0.0 || min_x > max_x || min_y > max_y) {
-        return pointcloud;
-    }
-
-    for (double y = min_y; y <= max_y; y += interval) {
-        for (double x = min_x; x <= max_x; x += interval) {
-            pointcloud.points.push_back(Vec3(x, y, height(x, y)));
-        }
-    }
-
-    return pointcloud;
-}
-

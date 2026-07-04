@@ -119,3 +119,7 @@ inline std::ostream &operator<<(std::ostream &out, const Vec3 &v) {
 [[nodiscard]] inline constexpr Vec3 reflect(const Vec3 &v, const Vec3 &n) noexcept {
     return v - (2 * dot(v, n) * n);
 }
+
+[[nodiscard]] inline constexpr double distance_squared(const Vec3 &a, const Vec3 &b) noexcept {
+    return (a - b).length_squared();
+}

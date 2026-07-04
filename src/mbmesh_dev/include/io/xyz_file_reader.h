@@ -4,7 +4,8 @@
 
 #include "../data_types/geometry.h"
 
-[[nodiscard]] inline PointCloud read_xyz_file(const std::string &path) {
-    PointCloud pointcloud;
-    return pointcloud;
-}
+[[nodiscard]] bool read_xyz_file(const std::string &path,
+                                 PointCloud *pointcloud,
+                                 std::string *error_message = nullptr);
+
+[[nodiscard]] PointCloud read_xyz_file(const std::string &path);

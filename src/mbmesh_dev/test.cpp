@@ -21,10 +21,10 @@ int main() {
     const PointCloud decimated_pointcloud = decimate_pointcloud_2d(pointcloud, 0.5);
 
     const OrientedPointCloud oriented_pointcloud = estimate_oriented_points(pointcloud, normal_k);
-    const char *visualization_path = "src/mbmesh/output/oriented_pointcloud.html";
+    const char *visualization_path = "src/mbmesh_dev/output/oriented_pointcloud.html";
 
     const OrientedPointCloud decimated_oriented_pointcloud = estimate_oriented_points(decimated_pointcloud, normal_k);
-    const char *decimated_visualization_path = "src/mbmesh/output/decimated_oriented_pointcloud.html";
+    const char *decimated_visualization_path = "src/mbmesh_dev/output/decimated_oriented_pointcloud.html";
 
     std::printf("Generated %zu synthetic points\n", pointcloud.points.size());
     std::printf("Estimated %zu oriented points\n", oriented_pointcloud.oriented_points.size());

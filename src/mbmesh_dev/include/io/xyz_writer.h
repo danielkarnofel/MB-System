@@ -4,4 +4,6 @@
 
 #include "../data_types/geometry.h"
 
-bool write_xyz_pointcloud(const PointCloud &pointcloud, const std::string &path);
+[[nodiscard]] bool write_xyz_pointcloud(const PointCloud &pointcloud,
+                                        const std::string &path,
+                                        std::string *error_message = nullptr);

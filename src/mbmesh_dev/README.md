@@ -2,26 +2,26 @@
 
 ## Next steps:
 
-### Finish Core IO
+Finish core IO
 - glb_writer
 - swath_reader
 
-## Sensor-Origin data
+Sensor-origin data
 - Add sensor-origin to swath file input
 - This is critical for proper normal orientation
 
-## Build pipeline functions
+Build pipeline functions
 - End-to-end wrapper functions
 - Generate meshes from swath data with user-friendly parameters
 
-## Integrate into src/mbmesh
+Integrate into src/mbmesh
 - Update build and run macros to include new features
 - Update documentation 
 
-## 3D Tiling
+3D Tiling
 - Implement OGC 3D tile support
 
-## Testing and documentation
+Testing and documentation
 - Prepare for final deliverable and presentation
 
 ## mbmesh command

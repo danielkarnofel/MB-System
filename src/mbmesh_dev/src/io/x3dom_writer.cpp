@@ -44,6 +44,25 @@ void write_color(std::ostream &output, const X3DomColor &color) {
     output << color.r << " " << color.g << " " << color.b;
 }
 
+X3DomColor normal_direction_color(const Vec3 &normal) {
+    if (normal.length_squared() <= vec3_epsilon * vec3_epsilon) {
+        return X3DomColor(0.5, 0.5, 0.5);
+    }
+
+    const Vec3 unit_normal = normalize(normal);
+    return X3DomColor(0.5 * (unit_normal.x + 1.0),
+                      0.5 * (unit_normal.y + 1.0),
+                      0.5 * (unit_normal.z + 1.0));
+}
+
+X3DomColor triangle_normal_direction_color(const Mesh &mesh, std::size_t triangle_index) {
+    const std::size_t index = triangle_index * 3;
+    const Vec3 &a = mesh.vertices[mesh.indices[index]];
+    const Vec3 &b = mesh.vertices[mesh.indices[index + 1]];
+    const Vec3 &c = mesh.vertices[mesh.indices[index + 2]];
+    return normal_direction_color(cross(b - a, c - a));
+}
+
 bool open_output(const char *filename, std::ofstream &output, std::string *error_message) {
     if (filename == nullptr || filename[0] == '\0') {
         set_error(error_message, "X3DOM output filename is empty");
@@ -224,11 +243,9 @@ void write_mesh_shape(std::ostream &output,
 
     output << "    <shape>\n"
            << "      <appearance>\n"
-           << "        <material diffuseColor=\"";
-    write_color(output, options.mesh_color);
-    output << "\" transparency=\"" << options.mesh_transparency << "\"></material>\n"
+           << "        <material diffuseColor=\"1 1 1\" transparency=\"0.0\"></material>\n"
            << "      </appearance>\n"
-           << "      <indexedFaceSet solid=\"false\" coordIndex=\"";
+           << "      <indexedFaceSet solid=\"false\" colorPerVertex=\"false\" coordIndex=\"";
 
     for (std::size_t i = 0; i < count; i++) {
         const std::size_t index = i * 3;
@@ -252,6 +269,16 @@ void write_mesh_shape(std::ostream &output,
     }
 
     output << "\"></coordinate>\n";
+
+    output << "        <color color=\"";
+    for (std::size_t i = 0; i < count; i++) {
+        const X3DomColor color = triangle_normal_direction_color(mesh, i);
+        write_color(output, color);
+        if (i + 1 < count) {
+            output << ", ";
+        }
+    }
+    output << "\"></color>\n";
 
     if (mesh.normals.size() == mesh.vertices.size()) {
         output << "        <normal vector=\"";

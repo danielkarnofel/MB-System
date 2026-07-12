@@ -6,7 +6,7 @@
 #include "../data_types/geometry.h"
 
 enum class MeshGenerationMethod {
-    ScreenedPoisson,
+    Poisson,
     Grid2D,
     Grid3D
 };
@@ -18,10 +18,34 @@ Mesh generate_mesh(const OrientedPointCloud &oriented_pointcloud, MeshGeneration
 // ====================================================================================================
 
 struct ScreenedPoissonOptions {
-    
+    double cell_size = 0.1;
+    double padding = 0.3;
+    double normal_splat_radius = 0.15;
+    double screening_weight = 4.0;
+    int solver_iterations = 200;
+    bool use_screening = true;
+    bool estimate_iso_value_from_samples = true;
+    double iso_value = 0.0;
 };
 
-Mesh generate_mesh_screened_poisson(const OrientedPointCloud &oriented_pointcloud, ScreenedPoissonOptions options);
+ScalarGrid3D screened_poisson(const OrientedPointCloud &oriented_pointcloud, ScreenedPoissonOptions options);
+
+struct MarchingCubesOptions {
+    double iso_value = 0.0;
+};
+
+Mesh marching_cubes(const ScalarGrid3D &scalar_grid, MarchingCubesOptions options);
+
+struct PoissonOptions {
+    int normal_neighbors = 20;
+    ScreenedPoissonOptions screened_poisson;
+    MarchingCubesOptions marching_cubes;
+};
+
+// Generates a mesh from a point cloud using PCA normal estimation, Screened Poisson surface reconstruction, and marching cubes
+Mesh generate_mesh_poisson(const PointCloud &pointcloud, PoissonOptions options);
+
+Mesh generate_mesh_poisson(const OrientedPointCloud &oriented_pointcloud, PoissonOptions options);
 
 // ====================================================================================================
 

@@ -1,5 +1,4 @@
 #include "algorithms/mesh_generation.h"
-#include "algorithms/marching_cubes.h"
 
 #include <algorithm>
 #include <cmath>
@@ -41,6 +40,15 @@ void mark_point_neighborhood(ScalarGrid3D &grid, const Point &point, double radi
     }
 }
 
+PointCloud oriented_to_pointcloud(const OrientedPointCloud &oriented_pointcloud) {
+    PointCloud pointcloud;
+    pointcloud.points.reserve(oriented_pointcloud.oriented_points.size());
+    for (const OrientedPoint &oriented_point : oriented_pointcloud.oriented_points) {
+        pointcloud.points.push_back(oriented_point.point);
+    }
+    return pointcloud;
+}
+
 } // namespace
 
 ScalarGrid3D pointcloud_to_grid_3D(const PointCloud &pointcloud, const Grid3DOptions &options) {
@@ -68,5 +76,11 @@ ScalarGrid3D pointcloud_to_grid_3D(const PointCloud &pointcloud, const Grid3DOpt
 
 Mesh generate_mesh_grid_3D(const PointCloud &pointcloud, const Grid3DOptions &options) {
     const ScalarGrid3D scalar_grid = pointcloud_to_grid_3D(pointcloud, options);
-    return marching_cubes(scalar_grid, options.iso_value);
+    MarchingCubesOptions marching_cubes_options;
+    marching_cubes_options.iso_value = options.iso_value;
+    return marching_cubes(scalar_grid, marching_cubes_options);
+}
+
+Mesh generate_mesh_grid_3D(const OrientedPointCloud &oriented_pointcloud, const Grid3DOptions &options) {
+    return generate_mesh_grid_3D(oriented_to_pointcloud(oriented_pointcloud), options);
 }

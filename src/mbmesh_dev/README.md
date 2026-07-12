@@ -1,32 +1,30 @@
+# mbmesh development repo
 
-Build command to run the mbmesh_dev XYZ Grid2D demo:
+## Next steps:
 
-```bash
-g++ -std=c++17 -I src/mbmesh_dev/include \
-  src/mbmesh_dev/test.cpp \
-  src/mbmesh_dev/src/algorithms/mesh_generation.cpp \
-  src/mbmesh_dev/src/algorithms/mesh_generation/grid_2D.cpp \
-  src/mbmesh_dev/src/algorithms/mesh_generation/grid_3D.cpp \
-  src/mbmesh_dev/src/algorithms/mesh_generation/marching_cubes.cpp \
-  src/mbmesh_dev/src/algorithms/mesh_generation/screened_poisson.cpp \
-  src/mbmesh_dev/src/io/x3dom_writer.cpp \
-  src/mbmesh_dev/src/io/xyz_reader.cpp \
-  -o /tmp/mbmesh_test && /tmp/mbmesh_test
-```
+### Finish Core IO
+- glb_writer
+- swath_reader
 
-The demo reads `src/mbmesh_dev/test_data/adjustedPointcloud.xyz` and writes
-`src/mbmesh_dev/output/adjusted_pointcloud.html` and
-`src/mbmesh_dev/output/adjusted_grid_2D_mesh.html`.
+## Sensor-Origin data
+- Add sensor-origin to swath file input
+- This is critical for proper normal orientation
 
-Build command to run the XYZ writer round-trip test:
+## Build pipeline functions
+- End-to-end wrapper functions
+- Generate meshes from swath data with user-friendly parameters
 
-```bash
-g++ -std=c++17 -I src/mbmesh_dev/include \
-  src/mbmesh_dev/test_xyz_writer.cpp \
-  src/mbmesh_dev/src/io/xyz_writer.cpp \
-  src/mbmesh_dev/src/io/xyz_reader.cpp \
-  -o /tmp/mbmesh_xyz_writer_test && /tmp/mbmesh_xyz_writer_test
-```
+## Integrate into src/mbmesh
+- Update build and run macros to include new features
+- Update documentation 
+
+## 3D Tiling
+- Implement OGC 3D tile support
+
+## Testing and documentation
+- Prepare for final deliverable and presentation
+
+## mbmesh command
 
 General command to run `mbmesh` with a selected datalist:
 
@@ -34,4 +32,8 @@ General command to run `mbmesh` with a selected datalist:
 mbmesh -I <datalist.mb-1> -O mbmesh_dev/output -html -V
 ```
 
-To run mbmesh with test data: mbmesh -I testdata/multibeam/ZTopo.mb-1 -html -V
+Example:
+
+```bash
+mbmesh -I multibeam/ZTopo.mb-1 -html -V
+```

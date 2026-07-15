@@ -109,3 +109,14 @@ g++ -std=c++17 -I src/mbmesh_dev/include \
   src/mbmesh_dev/src/io/xyz_reader.cpp \
   -o /tmp/mbmesh_test_xyz_writer && /tmp/mbmesh_test_xyz_writer
 ```
+
+### GLB Mesh Writer Test
+
+Writes a simple triangle mesh to binary glTF (`.glb`), validates the GLB header/chunks, checks the JSON describes mesh attributes, and verifies invalid mesh indices are rejected.
+
+```bash
+g++ -std=c++17 -I src/mbmesh_dev/include -I src/mbgrd2gltf \
+  src/mbmesh_dev/test/test_glb_writer.cpp \
+  src/mbmesh_dev/src/io/glb_writer.cpp \
+  -o /tmp/mbmesh_test_glb_writer && /tmp/mbmesh_test_glb_writer
+```

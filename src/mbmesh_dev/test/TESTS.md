@@ -2,15 +2,31 @@
 
 All commands below assume they are run from the repository root.
 
-### Full Pipeline Stub
+### Full Pipeline Screened Poisson Test
 
-Placeholder executable reserved for future end-to-end pipeline testing.
+Reads `src/mbmesh_dev/test_data/adjustedPointcloud.xyz`, decimates the input point cloud,
+estimates normals, runs the screened Poisson mesh generation pipeline, and writes X3DOM previews.
 
 ```bash
 g++ -std=c++17 -I src/mbmesh_dev/include \
   src/mbmesh_dev/test/test_main.cpp \
+  src/mbmesh_dev/src/algorithms/decimation.cpp \
+  src/mbmesh_dev/src/algorithms/mesh_generation.cpp \
+  src/mbmesh_dev/src/algorithms/mesh_generation/grid_2D.cpp \
+  src/mbmesh_dev/src/algorithms/mesh_generation/grid_3D.cpp \
+  src/mbmesh_dev/src/algorithms/mesh_generation/marching_cubes.cpp \
+  src/mbmesh_dev/src/algorithms/mesh_generation/screened_poisson.cpp \
+  src/mbmesh_dev/src/algorithms/normal_estimation.cpp \
+  src/mbmesh_dev/src/io/x3dom_writer.cpp \
+  src/mbmesh_dev/src/io/xyz_reader.cpp \
   -o /tmp/mbmesh_test_main && /tmp/mbmesh_test_main
 ```
+
+Writes:
+
+- `src/mbmesh_dev/output/adjusted_poisson_decimated_points.html`
+- `src/mbmesh_dev/output/adjusted_poisson_oriented_points.html`
+- `src/mbmesh_dev/output/adjusted_poisson_mesh.html`
 
 ### Grid Mesh Demo
 
@@ -86,6 +102,26 @@ Writes:
 
 - `src/mbmesh_dev/output/poisson_hemisphere_oriented_points.html`
 - `src/mbmesh_dev/output/poisson_hemisphere_mesh.html`
+
+### Synthetic Terrain Arch Poisson Normal Comparison
+
+Generates the perturbed terrain surface with a half-torus arch, runs screened Poisson once with exact synthetic normals and once from pure points using PCA normals flipped to positive Z. This highlights where positive-Z normal orientation breaks down without sensor-origin data, especially around overhang and underside geometry.
+
+```bash
+g++ -std=c++17 -I src/mbmesh_dev/include \
+  src/mbmesh_dev/test/test_synthetic_poisson_normals.cpp \
+  src/mbmesh_dev/src/algorithms/mesh_generation/marching_cubes.cpp \
+  src/mbmesh_dev/src/algorithms/mesh_generation/screened_poisson.cpp \
+  src/mbmesh_dev/src/algorithms/normal_estimation.cpp \
+  src/mbmesh_dev/src/synthetic_data/noise.cpp \
+  src/mbmesh_dev/src/io/x3dom_writer.cpp \
+  -o /tmp/mbmesh_test_synthetic_poisson_normals && /tmp/mbmesh_test_synthetic_poisson_normals
+```
+
+Writes:
+
+- `src/mbmesh_dev/output/synthetic_terrain_arch_poisson_exact_normals.html`
+- `src/mbmesh_dev/output/synthetic_terrain_arch_poisson_pca_positive_z.html`
 
 ### XYZ Reader Test
 

@@ -14,6 +14,11 @@ MAN_DEPRECATED = \
 	mbswplspreprocess.1
 endif
 
+if BUILD_MBTRNUTILS
+MAN_MBTRN = \
+	mbtrnpp.1
+endif
+
 man_MANS =  \
 	mbabsorption.1 \
 	mbareaclean.1 \
@@ -102,6 +107,7 @@ man_MANS =  \
 	mbusbl2fnv.1 \
 	mbvelocitytool.1 \
 	mbvoxelclean.1 \
-	$(MAN_DEPRECATED)
+	$(MAN_DEPRECATED) \
+	$(MAN_MBTRN)
 
 EXTRA_DIST = $(man_MANS)

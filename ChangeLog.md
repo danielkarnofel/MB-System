@@ -417,9 +417,27 @@ Updated mbedit's man page to document every long-option equivalent in both the s
 options list, matching the format already used by the getopt_long-converted src/utilities
 programs, and fixed a duplicate --verbose/-V entry found in the process.
 
-The bugs described above were identified and fixed with the assistance of the AI coding
-assistant Claude Sonnet 5 (Anthropic, model claude-sonnet-5), operating as Claude Code
-under developer supervision and review.
+Program mbtrnpp: Added a first man page for this utility, which previously had no
+documentation at all. mbtrnpp is an optional real-time preprocessor, normally run
+unattended aboard an AUV or other survey platform, that reads multibeam bathymetry
+(from a datalist, a single swath file, or a live network socket), applies automated
+cleaning and downsampling, and passes the result to an embedded terrain relative
+navigation (TRN) process; it is built only when MB-System is configured with TRN
+support (--enable-mbtrn with autotools, or -DbuildTRN=ON with CMake, both of which
+are the default). The new man page documents the synopsis, description, and every
+command-line/configuration-file option (input/output specifiers, TRN map/filter/
+convergence settings, reinitialization and decimation options, and the mb-out/trn-out
+network output mnemonics), drawn from the option-parsing code in mbtrnpp.c and the
+existing README-mbtrnpp.md and mbtrnpp-cfg.example documentation, along with usage
+examples. The page is installed by src/man/man1/CMakeLists.txt only when the buildTRN
+CMake option is enabled, and by src/man/man1/Makefile.am/Makefile.in only when the
+BUILD_MBTRNUTILS automake conditional is set, matching the pattern already used for
+the deprecated-program man pages so that the page is never installed alongside a build
+that lacks the program itself.
+
+The bugs described above, and the mbtrnpp man page, were identified and written with
+the assistance of the AI coding assistant Claude Sonnet 5 (Anthropic, model
+claude-sonnet-5), operating as Claude Code under developer supervision and review.
 
 #### 5.8.3beta14 (July 6, 2026)
 

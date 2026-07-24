@@ -104,7 +104,12 @@ if(buildDeprecated)
         mbswplspreprocess.1)
 endif()
 
-install(FILES ${manpages} ${deprecated} DESTINATION ${CMAKE_INSTALL_MANPAGES}/man1)
+if(buildTRN)
+    set(trn
+        mbtrnpp.1)
+endif()
+
+install(FILES ${manpages} ${deprecated} ${trn} DESTINATION ${CMAKE_INSTALL_MANPAGES}/man1)
 
 message(STATUS "Installed man pages to ${CMAKE_INSTALL_MANPAGES}/man1")
 

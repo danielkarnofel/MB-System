@@ -1,0 +1,554 @@
+.TH mbtrnpp 1 "24 July 2026" "MB-System 5.0" "MB-System 5.0"
+.SH NAME
+\fBmbtrnpp\fP \- Real-time preprocessor that reads multibeam sonar data, applies
+automated cleaning and downsampling, and passes the resulting bathymetry to a
+terrain relative navigation (TRN) process.
+
+.SH VERSION
+Version 5.0
+
+.SH SYNOPSIS
+\fBmbtrnpp\fP
+.br
+[--verbose
+.br
+--help
+.br
+--config=path
+.br
+--log-directory=path
+.br
+--input=datalist|file|socket_definition
+.br
+--output=file|socket
+.br
+--format=format
+.br
+--platform-file=file
+.br
+--platform-target-sensor=sensor_id
+.br
+--tide-model=file
+.br
+--swath-width=value
+.br
+--soundings=value
+.br
+--median-filter=threshold/nx/ny
+.br
+--statsec=d.d
+.br
+--statflags=<MSF_STATUS|MSF_EVENT|MSF_ASTAT|MSF_PSTAT|MSF_READER>
+.br
+--delay=n
+.br
+--mb-out=mb1svr[:host:port]/mb1/file[:path]/reson/nomb1/noreson/nombsvr/nombtrnpp
+.br
+--mbhbn=n
+.br
+--mbhbt=d.d
+.br
+--trn-en
+.br
+--trn-dev=s
+.br
+--use-proj[=bool]
+.br
+--projection=projection_id
+.br
+--trn-crs=s
+.br
+--trn-utm=zone
+.br
+--trn-map=path
+.br
+--trn-cfg=path
+.br
+--trn-par=path
+.br
+--trn-mid=id
+.br
+--trn-mtype=n
+.br
+--trn-sensor-type=n
+.br
+--trn-ftype=n
+.br
+--trn-fgrade=n
+.br
+--trn-freinit=n
+.br
+--trn-mweight=n
+.br
+--trn-ncov=value
+.br
+--trn-nerr=value
+.br
+--trn-ecov=value
+.br
+--trn-eerr=value
+.br
+--trn-decn=n
+.br
+--trn-decs=d.d
+.br
+--covariance-magnitude-max=value
+.br
+--convergence-repeat-min=n
+.br
+--reinit-search=reinit_search_xy/reinit_search_z
+.br
+--reinit-gain[=bool]
+.br
+--reinit-file[=bool]
+.br
+--reinit-xyoffset=xyoffset_max
+.br
+--reinit-zoffset=zoffset_min/zoffset_max
+.br
+--random-offset
+.br
+--trn-out=trnsvr[:host:port]/trnusvr[:host:port]/trnumsvr[:group:port:ttl]/trnu/trnub/sout/serr/debug/notrnsvr/notrnusvr/notrnumsvr
+.br
+--trnhbt=d.d
+.br
+--trnuhbt=d.d]
+
+.SH DESCRIPTION
+\fBmbtrnpp\fP is a command line program, normally run unattended aboard an
+autonomous underwater vehicle (AUV) or other survey platform, that reads
+multibeam bathymetry in real time (from a datalist, a single swath data
+file, or a live network socket), applies automated cleaning, swath-width
+limiting, and sounding decimation, and then passes the resulting bathymetry
+soundings on to a terrain relative navigation (TRN) engine embedded in the
+program. \fBmbtrnpp\fP is one of the \fBMB-System\fP utilities in the
+\fBmbtrnutils\fP source directory; it is an optional program, built only
+when \fBMB-System\fP is configured with TRN support enabled
+(\fB--enable-mbtrn\fP with autotools, or \fB-DbuildTRN=ON\fP with
+\fBCMake\fP, both of which are the default), and further requires TRN
+support (\fB--enable-mbtnav\fP or \fB-DbuildTRNLCM\fP-related \fBCMake\fP
+options) to actually run TRN rather than simply relaying bathymetry.
+
+\fBmbtrnpp\fP has no interactive display; it is configured entirely through
+command line options and, optionally, a configuration file specified with
+\fB--config\fP. The order of precedence for setting an option is (highest to
+lowest) command line options, configuration file options, and compiled-in
+defaults. Because \fBmbtrnpp\fP is normally run unattended and continuously,
+most deployments use a shell wrapper that first sources an environment file
+(setting variables such as \fBTRN_HOST\fP, \fBTRN_MAPFILES\fP,
+\fBTRN_DATAFILES\fP, and \fBTRN_LOGFILES\fP that are referenced by mnemonic
+in the configuration file and by \fBmbtrnpp\fP itself), and then invokes
+\fBmbtrnpp\fP with \fB--config\fP pointing to a configuration file tailored
+to the vehicle and mission. The \fB--help\fP option is useful even in normal
+operation, since \fBmbtrnpp\fP prints its default, configuration-file, and
+final (command-line-overridden) settings to stderr as it starts up, before
+exiting without reading any data; this allows a configuration to be checked
+without actually running a survey.
+
+Input bathymetry may come from a recursive \fBMB-System\fP datalist or a
+single swath data file (in which case \fB--format\fP normally must also be
+given), read exactly as with other \fBMB-System\fP utilities, or from a live
+data socket (e.g. a Reson/Teledyne multibeam sonar or 7k Center, specified
+with an \fB--input\fP value beginning \fIsocket:\fP) for real-time
+operation. As pings are read, \fBmbtrnpp\fP applies an automated median
+filter across and along track to flag anomalous soundings, limits the swath
+to the width set by \fB--swath-width\fP, and decimates each ping to the
+number of soundings set by \fB--soundings\fP. The processed soundings are
+packaged into MB1 records, which may be logged to a binary file, served to
+network clients, and/or passed directly to the embedded TRN instance for
+terrain-relative position estimation (when TRN is enabled with
+\fB--trn-en\fP and \fBMB-System\fP was built with TRN navigation support).
+TRN position estimates and updates may in turn be logged and/or served to
+network clients using the \fB--trn-out\fP option.
+
+\fBmbtrnpp\fP writes several kinds of log files (an MB-System processing
+log, an mbtrnpp session log, MB1 server and TRN server/update session logs,
+the MB1 binary record log, and, if TRN is enabled, a TRN instance log
+directory) into the directory set by \fB--log-directory\fP; a symbolic link
+named \fBmbtrnpp-latest\fP pointing at this directory is created (or
+replaced) each time \fBmbtrnpp\fP starts. See the \fBREADME-mbtrnpp.md\fP
+file distributed with \fBMB-System\fP in \fBsrc/mbtrn/tools/cfg\fP for a
+complete description of the environment and configuration files, the
+network output specifiers, log file naming, and troubleshooting tips.
+
+.SH MB-SYSTEM AUTHORSHIP
+David W. Caress
+.br
+ Monterey Bay Aquarium Research Institute
+.br
+Dale N. Chayes
+.br
+ Center for Coastal and Ocean Mapping
+.br
+ University of New Hampshire
+.br
+Kent Headley
+.br
+ Monterey Bay Aquarium Research Institute
+.br
+Christian dos Santos Ferreira
+.br
+ MARUM - Center for Marine Environmental Sciences
+.br
+ University of Bremen
+
+.SH OPTIONS
+.TP
+.B \--verbose
+This option increases the verbosity of \fBmbtrnpp\fP, which means that more
+information than by default is output to the stderr stream of the shell.
+Negative values (e.g. \fB--verbose=-2\fP) also select the printing of the
+program name and \fBMB-System\fP version banner at startup.
+.TP
+.B \--help
+This option causes \fBmbtrnpp\fP to print a description of what it does and
+a summary of the command line options, and then exit without reading any
+data. Because \fBmbtrnpp\fP always prints its default, configuration-file,
+and final settings to stderr before checking for \fB--help\fP, this option
+is a convenient way to verify a configuration (including one loaded with
+\fB--config\fP) without starting a survey.
+.TP
+.B \--config=path
+This option specifies a configuration file containing any of the
+\fBmbtrnpp\fP command line options, one \fIkey\fP\fB=\fP\fIvalue\fP pair
+per line (using the same option names as the command line, without the
+leading \fB--\fP). Configuration file options override the compiled-in
+defaults, and are in turn overridden by the same option given explicitly on
+the command line. The \fB--config\fP option itself is recognized before any
+other command line processing, so a configuration file may be combined with
+command-line overrides in a single invocation. See the annotated example
+configuration file \fBsrc/mbtrn/tools/cfg/mbtrnpp-cfg.example\fP distributed
+with \fBMB-System\fP.
+.TP
+.B \--log-directory=path
+This option sets the directory into which \fBmbtrnpp\fP writes its log
+files (the \fBMB-System\fP processing log, the mbtrnpp and MB1/TRN server
+session logs, the MB1 binary record log, and, if TRN is enabled, the TRN
+instance log directory). The directory is created if it does not already
+exist. The default is the current working directory (\fB.\fP). A symbolic
+link named \fBmbtrnpp-latest\fP pointing at this directory is created (or
+replaced) each time \fBmbtrnpp\fP starts.
+.TP
+.B \--input=datalist|file|socket_definition
+This option specifies the source of input bathymetry data, exactly as the
+\fB--input\fP (\fB-I\fP) option does in other \fBMB-System\fP utilities,
+with the addition of live socket input. If the value does not begin with
+\fIsocket:\fP, it is read as an \fBMB-System\fP recursive datalist (in which
+case \fB--format\fP is not required, since each listed file names its own
+format) or as a single swath data file (in which case \fB--format\fP must
+also be given). If the value begins \fIsocket:\fP, the remainder is a
+socket definition string (e.g. identifying a Reson/Teledyne sonar or 7k
+Center host and port) used to read multibeam pings from a live network
+connection instead of a file; \fB--format\fP must be set to the format ID
+appropriate for the socket data stream. The default input is \fBstdin\fP.
+.TP
+.B \--output=file|socket
+This option enables output of processed MB1 records to a binary file
+and/or a network socket server. A value of \fIfile\fP enables logging to a
+file with the default \fBMB-System\fP-generated name; a value of the form
+\fIfile:\fP\fIpath\fP logs to \fIpath\fP instead. A value of \fIsocket\fP
+enables the MB1 socket server using its default host and port; a value of
+the form \fIsocket:\fP\fIhost\fP\fB:\fP\fIport\fP overrides the host and/or
+port. Multiple comma-separated values may be given. This option predates,
+and is functionally a subset of, the more general \fB--mb-out\fP option;
+new configurations should prefer \fB--mb-out\fP.
+.TP
+.B \--format=format
+This option sets the \fBMB-System\fP format ID of the input data, exactly
+as the \fB--format\fP (\fB-F\fP) option does in other \fBMB-System\fP
+utilities. It is required when \fB--input\fP names a single file or a live
+socket; it is not needed when \fB--input\fP names a datalist, since each
+file listed in the datalist specifies its own format.
+.TP
+.B \--platform-file=file
+This option specifies an \fBMB-System\fP platform definition file
+describing the sensor offsets and orientation of the survey platform
+(vehicle), exactly as used by \fBmbpreprocess\fP and other \fBMB-System\fP
+utilities that support platform files. See the \fBMB-System\fP manual page
+for a description of the platform file format.
+.TP
+.B \--platform-target-sensor=sensor_id
+This option selects, by ID, the sensor within the platform file (given by
+\fB--platform-file\fP) whose offsets are applied to the bathymetric
+soundings.
+.TP
+.B \--tide-model=file
+This option specifies a tide model file used to remove tidal variation from
+the input bathymetry, following the same tide model file format used by
+\fBmbotps\fP and \fBmbprocess\fP elsewhere in \fBMB-System\fP.
+.TP
+.B \--swath-width=value
+This option sets the width of the sonar swath, in decimal degrees measured
+from nadir, that is retained from each ping; soundings outside this swath
+are excluded from output. The default is 90.0 (the full swath).
+.TP
+.B \--soundings=value
+This option sets the number of soundings output per ping after decimation.
+Soundings are selected evenly across the retained swath. The default is 11.
+.TP
+.B \--median-filter=threshold/nx/ny
+This option enables an automated median filter applied to the bathymetry
+before decimation, and sets its parameters: \fIthreshold\fP is the fractional
+deviation from the local median depth (relative to depth) beyond which a
+sounding is flagged bad, and \fInx\fP and \fIny\fP are respectively the
+number of soundings across track and the number of pings along track
+included in the local neighborhood used to compute the median. If this
+option is not given, the median filter is disabled.
+.TP
+.B \--statsec=d.d
+This option sets the interval, in seconds, at which \fBmbtrnpp\fP logs
+periodic processing statistics (selected by \fB--statflags\fP).
+.TP
+.B \--statflags=<MSF_STATUS|MSF_EVENT|MSF_ASTAT|MSF_PSTAT|MSF_READER>
+This option selects which categories of processing statistics
+\fBmbtrnpp\fP logs, as a \fB|\fP- (or \fB:\fP-) delimited list of flag
+names: \fIMSF_STATUS\fP enables status counters, \fIMSF_EVENT\fP enables
+event/error counters, \fIMSF_ASTAT\fP enables aggregate (cumulative)
+statistics, \fIMSF_PSTAT\fP enables periodic (interval) statistics, and
+\fIMSF_READER\fP enables statistics from the socket data reader. The
+default is \fIMSF_STATUS|MSF_EVENT|MSF_ASTAT|MSF_PSTAT\fP.
+.TP
+.B \--delay=n
+This option sets a delay, in milliseconds, added to the main MB1 processing
+loop on each iteration; it may be used to throttle processing when input
+data arrive faster than downstream consumers (TRN, network clients) can
+keep up. The default is 0 (no delay).
+.TP
+.B \--mb-out=mb1svr[:host:port]/mb1/file[:path]/reson/nomb1/noreson/nombsvr/nombtrnpp
+This option configures MB1 (processed bathymetry) output, as a
+\fB,\fP-delimited list of tokens: \fImb1svr\fP (optionally followed by
+\fB:\fP\fIhost\fP\fB:\fP\fIport\fP) enables the MB1 network server;
+\fImb1\fP enables binary MB1 record logging using the default log file
+name; \fIfile\fP (optionally followed by \fB:\fP\fIpath\fP) enables binary
+MB1 record logging, to \fIpath\fP if given; \fIreson\fP enables logging of
+the raw Reson/Teledyne S7K data frames; and the \fIno\fP-prefixed tokens
+(\fInomb1\fP, \fInoreson\fP, \fInombsvr\fP, \fInombtrnpp\fP) disable the
+corresponding output (\fInombtrnpp\fP disables the mbtrnpp message log
+itself, which is not recommended). Tokens are processed in order, so a
+later token can override an earlier one on the same command line.
+.TP
+.B \--mbhbn=n
+This option sets the number of missed heartbeats the MB1 server tolerates
+from a client before dropping the connection.
+.TP
+.B \--mbhbt=d.d
+This option sets the heartbeat timeout, in seconds, for the MB1 server.
+.TP
+.B \--trn-en
+This option enables terrain relative navigation processing using the
+embedded TRN instance; \fBmbtrnpp\fP must have been built with TRN
+navigation support (\fB--enable-mbtnav\fP, or the corresponding \fBCMake\fP
+option) for TRN processing to actually occur. When disabled, \fBmbtrnpp\fP
+still reads, cleans, and outputs bathymetry, but does not attempt terrain
+navigation. TRN is enabled by default; use \fB--trn-en=N\fP (or \fB=0\fP) to
+disable it.
+.TP
+.B \--trn-dev=s
+This option selects the sonar device type used to interpret live socket
+input, by mnemonic (e.g. \fI7125_200\fP for a Seabat 7125 at 200 kHz,
+\fI7125_400\fP for a Seabat 7125 at 400 kHz, or \fIT50\fP for a T50-S/T50-R).
+The mnemonic is translated internally to the device and system enumerator
+values required to subscribe to the sonar's data stream; see \fBr7kc.h\fP in
+the \fBMB-System\fP source for the full mapping.
+.TP
+.B \--use-proj[=bool]
+This option enables (the default) or disables use of the \fBPROJ\fP
+cartographic projection library to convert geographic coordinates to the
+projected coordinate system used internally by TRN, instead of a simple UTM
+calculation.
+.TP
+.B \--projection=projection_id
+This option sets the numeric \fBPROJ\fP projection ID used when
+\fB--use-proj\fP is enabled.
+.TP
+.B \--trn-crs=s
+This option sets the \fBPROJ\fP coordinate reference system string used
+when \fB--use-proj\fP is enabled, in place of \fB--projection\fP.
+.TP
+.B \--trn-utm=zone
+This option sets the UTM zone (an integer from 1 to 60) used for TRN
+processing when \fB--use-proj\fP is disabled (e.g. zone 9 for the axial
+seamount test site, zone 10 for Monterey Bay).
+.TP
+.B \--trn-map=path
+This option specifies the path to the terrain reference map used by the TRN
+server; it may be a single map file or a directory of tiled map files. A
+terrain map is required for TRN processing to converge.
+.TP
+.B \--trn-cfg=path
+This option specifies the path to the TRN configuration file, which sets
+per-vehicle TRN filter and sensor specification parameters. A TRN
+configuration file is required for TRN processing.
+.TP
+.B \--trn-par=path
+This option specifies the path to a TRN particle filter configuration file,
+used only when the TRN particle filter is selected (see \fB--trn-ftype\fP).
+.TP
+.B \--trn-mid=id
+This option sets the TRN mission ID string used in naming the TRN server's
+own log files and log directory.
+.TP
+.B \--trn-mtype=n
+This option sets the TRN terrain map type: \fI1\fP selects a DEM
+(elevation grid) map, and \fI2\fP selects a bottom-object (BO) map.
+.TP
+.B \--trn-sensor-type=n
+This option sets the TRN sensor type identifying the source of bathymetry
+supplied to TRN; the default corresponds to a generic \fBMB-System\fP
+(\fBMB1\fP) multibeam source.
+.TP
+.B \--trn-ftype=n
+This option sets the TRN estimation filter type: \fI0\fP disables
+filtering, \fI1\fP selects a point-mass filter, \fI2\fP selects a particle
+filter, and \fI3\fP selects a filter bank.
+.TP
+.B \--trn-fgrade=n
+This option sets the TRN filter grade: \fI0\fP selects a low-grade filter
+configuration, and \fI1\fP (the default) selects a high-grade filter
+configuration.
+.TP
+.B \--trn-freinit=n
+This option enables (\fI1\fP, the default) or disables (\fI0\fP) automatic
+reinitialization of the TRN estimation filter, e.g. after divergence.
+.TP
+.B \--trn-mweight=n
+This option selects the TRN modified-weighting scheme used during
+filtering: \fI0\fP applies no weighting modification, \fI1\fP applies the
+original alpha modification, \fI2\fP applies crossbeam weighting with the
+alpha modification, \fI3\fP applies subcloud weighting with the original
+alpha modification, and \fI4\fP (the default) applies subcloud weighting
+with modified NIS (normalized innovation squared) always enabled.
+.TP
+.B \--trn-ncov=value
+This option sets the TRN convergence criterion for northing covariance; a
+TRN solution is not considered converged unless its northing covariance is
+below this value.
+.TP
+.B \--trn-nerr=value
+This option sets the TRN convergence criterion for northing error.
+.TP
+.B \--trn-ecov=value
+This option sets the TRN convergence criterion for easting covariance.
+.TP
+.B \--trn-eerr=value
+This option sets the TRN convergence criterion for easting error.
+.TP
+.B \--trn-decn=n
+This option sets the TRN update decimation modulus: a TRN position update
+is computed and issued only for every \fIn\fPth processed MB1 sounding
+record. The default is 0 (update on every record).
+.TP
+.B \--trn-decs=d.d
+This option sets a minimum time interval, in seconds, between TRN position
+updates, as a decimation criterion alternative (or in addition) to
+\fB--trn-decn\fP.
+.TP
+.B \--covariance-magnitude-max=value
+This option sets the maximum TRN covariance magnitude below which a TRN
+solution is considered a candidate for stable convergence; smaller values
+impose a stricter convergence requirement. A value around 10.0 is typical
+for 1-meter-scale mapping.
+.TP
+.B \--convergence-repeat-min=n
+This option sets the number of consecutive TRN update cycles that must meet
+the convergence criteria (\fB--covariance-magnitude-max\fP and related
+limits) before the TRN solution is declared stably converged. A value
+around 400 is typical for 1-meter-scale mapping.
+.TP
+.B \--reinit-search=reinit_search_xy/reinit_search_z
+This option sets the size, in meters, of the horizontal
+(\fIreinit_search_xy\fP) and vertical (\fIreinit_search_z\fP) search area
+used by TRN when reinitializing its position estimate. The defaults are 60
+m horizontal and 5 m vertical.
+.TP
+.B \--reinit-gain[=bool]
+This option enables or disables gating TRN reinitialization using the
+sonar's transmit gain setting (e.g. to avoid reinitializing on pings taken
+with an atypical gain). Disabled by default.
+.TP
+.B \--reinit-file[=bool]
+This option enables or disables reinitializing TRN whenever a new input
+file begins while reading from a datalist. Disabled by default; only
+meaningful when reading from a datalist or file rather than a live socket.
+.TP
+.B \--reinit-xyoffset=xyoffset_max
+This option enables reinitialization of TRN whenever the magnitude of its
+converged horizontal (xy) offset from the vehicle's dead-reckoned position
+exceeds \fIxyoffset_max\fP, in meters.
+.TP
+.B \--reinit-zoffset=zoffset_min/zoffset_max
+This option enables reinitialization of TRN whenever the magnitude of its
+converged vertical (z) offset falls below \fIzoffset_min\fP or exceeds
+\fIzoffset_max\fP, in meters.
+.TP
+.B \--random-offset
+This option enables injection of a randomized offset into the TRN filter's
+initial position estimate; this is intended for testing TRN's ability to
+reconverge after reinitialization, and should not normally be used during
+an actual survey.
+.TP
+.B \--trn-out=trnsvr[:host:port]/trnusvr[:host:port]/trnumsvr[:group:port:ttl]/trnu/trnub/sout/serr/debug/notrnsvr/notrnusvr/notrnumsvr
+This option configures TRN position/update output, as a \fB,\fP-delimited
+list of tokens: \fItrnsvr\fP (optionally followed by
+\fB:\fP\fIhost\fP\fB:\fP\fIport\fP) enables the TRN TCP server interface;
+\fItrnusvr\fP (optionally followed by \fB:\fP\fIhost\fP\fB:\fP\fIport\fP)
+enables the TRN update (TRNU) TCP server; \fItrnumsvr\fP (optionally
+followed by \fB:\fP\fIgroup\fP\fB:\fP\fIport\fP\fB:\fP\fIttl\fP) enables a
+TRN update UDP multicast server; \fItrnu\fP enables ASCII logging of TRN
+update records, and \fItrnub\fP enables binary logging of the same;
+\fIsout\fP and \fIserr\fP send TRN output to stdout and stderr,
+respectively; \fIdebug\fP enables verbose TRN debug output; and the
+\fIno\fP-prefixed tokens (\fInotrnsvr\fP, \fInotrnusvr\fP, \fInotrnumsvr\fP)
+disable the corresponding server. The mnemonics \fBTRN_HOST\fP and
+\fBTRN_GROUP\fP may be used in place of an explicit \fIhost\fP or
+\fIgroup\fP, in which case the corresponding environment variable is
+substituted at run time.
+.TP
+.B \--trnhbt=d.d
+This option sets the heartbeat timeout, in seconds, for the TRN TCP server.
+.TP
+.B \--trnuhbt=d.d
+This option sets the heartbeat timeout, in seconds, for the TRN update
+(TRNU) TCP server.
+
+.SH EXAMPLES
+Suppose you want to check a mission configuration before running a survey,
+without actually starting to process data. Sourcing the mission's
+environment file first makes its mnemonic variables (\fBTRN_HOST\fP,
+\fBTRN_MAPFILES\fP, and so on) available for substitution in the
+configuration file:
+.br
+    . env/mbtrnpp-Sentry.env
+.br
+    mbtrnpp --config=TRNcfg/mbtrnpp-Sentry.cfg --help
+.br
+\fBmbtrnpp\fP prints its default settings, the settings loaded from the
+configuration file, and the final effective settings to stderr, then exits
+without reading any data.
+
+To actually run the same configuration as a real-time TRN preprocessor,
+logging to a mission-specific log directory:
+.br
+    . env/mbtrnpp-Sentry.env
+.br
+    mbtrnpp --config=TRNcfg/mbtrnpp-Sentry.cfg \\
+.br
+            --log-directory=/home/mappingauv/logs/mbtrnpp
+
+To process a single existing swath file offline (e.g. to test cleaning and
+TRN convergence against a previously recorded survey) rather than a live
+sonar socket, overriding the configuration file's \fB--input\fP setting:
+.br
+    mbtrnpp --config=TRNcfg/mbtrnpp-Sentry.cfg \\
+.br
+            --input=20240510_120000.mb88 --format=88
+
+.SH SEE ALSO
+\fBmbsystem\fP(1), \fBmbio\fP(1), \fBmbpreprocess\fP(1), \fBmbclean\fP(1),
+\fBmbotps\fP(1)
+
+.SH BUGS
+Unsupervised real-time terrain navigation is inherently harder to debug than
+the interactive \fBMB-System\fP tools it borrows cleaning logic from; when
+something looks wrong, start by rereading the log files and rechecking the
+configuration with \fB--help\fP before suspecting the code.

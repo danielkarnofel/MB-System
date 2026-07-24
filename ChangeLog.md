@@ -398,6 +398,25 @@ now fully implemented in mbsegylist and documented in its man page. The other th
 -W, mbsegypsd's -P, mbextractsegy's -D) had no discoverable intended purpose anywhere in the code,
 man pages, or usage messages, so rather than guess at functionality they were removed outright.
 
+Programs mbedit, mbnavedit, mbvelocitytool, mbgrdviz, and mbeditviz: Added long-option
+(--long-name) equivalents to these five interactive Motif programs' command-line options,
+extending the getopt_long() work above from src/utilities to the GUI editors (mbnavadjust was
+requested too but already had full getopt_long() support). As with src/utilities, this surfaced
+a dead option with no case handler at all: mbedit's -S. Unlike the src/utilities finds, this one
+had a full, traceable history back to 1993 - before MB-System's "Version 5.0" rewrite in 2000,
+-S set a startup_save_mode flag controlling whether a pre-existing edit save (.esf) file would
+be loaded for the input file; the getopt string lost its argument and the case handler was later
+dropped entirely as the code was restructured into the modern Motif-callback architecture, but
+the underlying feature never actually disappeared - mbedit still has two live callback paths,
+one that loads a file fresh and one that loads it using an existing edit save file, offered to
+the user via a "use previous edits?" dialog that pops up at startup whenever a save file already
+exists. The CLI flag's original job was simply to skip that dialog and answer "yes" automatically,
+exactly the kind of thing needed when mbedit is launched non-interactively by another process
+(the same rationale as the existing -G/--gui-mode option). Restored as -S/--use-edit-save.
+Updated mbedit's man page to document every long-option equivalent in both the synopsis and
+options list, matching the format already used by the getopt_long-converted src/utilities
+programs, and fixed a duplicate --verbose/-V entry found in the process.
+
 The bugs described above were identified and fixed with the assistance of the AI coding
 assistant Claude Sonnet 5 (Anthropic, model claude-sonnet-5), operating as Claude Code
 under developer supervision and review.

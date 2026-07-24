@@ -35,6 +35,7 @@
 
 // TODO(schwehr): useprevious int boolean -> bool
 
+#include <getopt.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -138,7 +139,19 @@ struct mbnavedit_plot_struct {
 static char program_name[] = "MBNAVEDIT";
 static char help_message[] = "MBNAVEDIT is an interactive navigation editor for swath sonar data.\n\tIt can work with any data "
                              "format supported by the MBIO library.\n";
-static char usage_message[] = "mbnavedit [-Byr/mo/da/hr/mn/sc -D  -Eyr/mo/da/hr/mn/sc \n\t-Fformat -Ifile -Ooutfile -X -V -H]";
+static char usage_message[] =
+    "mbnavedit\n"
+    "\t--begin-time=yr/mo/da/hr/mn/sc {-Byr/mo/da/hr/mn/sc}\n"
+    "\t--browse {-D}\n"
+    "\t--end-time=yr/mo/da/hr/mn/sc {-Eyr/mo/da/hr/mn/sc}\n"
+    "\t--format=format_id {-Fformat_id}\n"
+    "\t--gui-mode {-G}\n"
+    "\t--help {-H}\n"
+    "\t--input=file {-Ifile}\n"
+    "\t--strip-comments {-N}\n"
+    "\t--use-ping-data {-P}\n"
+    "\t--run-mbprocess {-X}\n"
+    "\t--verbose {-V}\n\n";
 
 /* status variables */
 static int error = MB_ERROR_NO_ERROR;
@@ -333,9 +346,63 @@ int mbnavedit_init(int argc, char **argv, int *startup_file) {
 	int c;
 	int help = 0;
 
+	static struct option options[] = {{"verbose", no_argument, NULL, 0},
+	                                   {"help", no_argument, NULL, 0},
+	                                   {"begin-time", required_argument, NULL, 0},
+	                                   {"browse", no_argument, NULL, 0},
+	                                   {"end-time", required_argument, NULL, 0},
+	                                   {"format", required_argument, NULL, 0},
+	                                   {"gui-mode", no_argument, NULL, 0},
+	                                   {"input", required_argument, NULL, 0},
+	                                   {"strip-comments", no_argument, NULL, 0},
+	                                   {"use-ping-data", no_argument, NULL, 0},
+	                                   {"run-mbprocess", no_argument, NULL, 0},
+	                                   {NULL, 0, NULL, 0}};
+	int option_index;
+
 	/* process argument list */
-	while ((c = getopt(argc, argv, "VvHhB:b:DdE:e:F:f:GgI:i:NnPpXx")) != -1)
+	while ((c = getopt_long(argc, argv, "VvHhB:b:DdE:e:F:f:GgI:i:NnPpXx", options, &option_index)) != -1)
 		switch (c) {
+		/* long options all return c=0 */
+		case 0:
+			if (strcmp("verbose", options[option_index].name) == 0) {
+				verbose++;
+			}
+			else if (strcmp("help", options[option_index].name) == 0) {
+				help++;
+			}
+			else if (strcmp("begin-time", options[option_index].name) == 0) {
+				sscanf(optarg, "%d/%d/%d/%d/%d/%d", &btime_i[0], &btime_i[1], &btime_i[2], &btime_i[3], &btime_i[4], &btime_i[5]);
+				btime_i[6] = 0;
+			}
+			else if (strcmp("browse", options[option_index].name) == 0) {
+				output_mode = OUTPUT_MODE_BROWSE;
+			}
+			else if (strcmp("end-time", options[option_index].name) == 0) {
+				sscanf(optarg, "%d/%d/%d/%d/%d/%d", &etime_i[0], &etime_i[1], &etime_i[2], &etime_i[3], &etime_i[4], &etime_i[5]);
+				etime_i[6] = 0;
+			}
+			else if (strcmp("format", options[option_index].name) == 0) {
+				sscanf(optarg, "%d", &format);
+			}
+			else if (strcmp("gui-mode", options[option_index].name) == 0) {
+				gui_mode = true;
+			}
+			else if (strcmp("input", options[option_index].name) == 0) {
+				sscanf(optarg, "%s", ifile);
+				do_parse_datalist(ifile, format);
+				fileflag++;
+			}
+			else if (strcmp("strip-comments", options[option_index].name) == 0) {
+				strip_comments = true;
+			}
+			else if (strcmp("use-ping-data", options[option_index].name) == 0) {
+				use_ping_data = true;
+			}
+			else if (strcmp("run-mbprocess", options[option_index].name) == 0) {
+				run_mbprocess = true;
+			}
+			break;
 		case 'H':
 		case 'h':
 			help++;

@@ -34,6 +34,7 @@
  * Date:        June 6, 1993
  */
 
+#include <getopt.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -72,7 +73,15 @@ static char help_message[] = "MBVELOCITYTOOL is an interactive water velocity pr
                              "profiles obtained from XBTs, CTDs, or  \ndatabases, and to construct new profiles consistent with "
                              "these  \nvarious sources of information.";
 static char usage_message[] =
-    "mbvelocitytool [-Byr/mo/da/hr/mn/sc -Eyr/mo/da/hr/mn/sc \n\t-Fformat -Ifile -Ssvpfile -Wsvpfile -V -H]";
+    "mbvelocitytool\n"
+    "\t--begin-time=yr/mo/da/hr/mn/sc {-Byr/mo/da/hr/mn/sc}\n"
+    "\t--display-svp-file=svpfile {-Ssvpfile}\n"
+    "\t--edit-svp-file=svpfile {-Wsvpfile}\n"
+    "\t--end-time=yr/mo/da/hr/mn/sc {-Eyr/mo/da/hr/mn/sc}\n"
+    "\t--format=format_id {-Fformat_id}\n"
+    "\t--help {-H}\n"
+    "\t--input=file {-Ifile}\n"
+    "\t--verbose {-V}\n\n";
 
 int error = MB_ERROR_NO_ERROR;
 int verbose = 0;
@@ -244,9 +253,49 @@ int mbvt_init(int argc, char **argv) {
 	strcpy(sfile, "");
 	strcpy(wfile, "");
 
+	static struct option options[] = {{"verbose", no_argument, NULL, 0},
+	                                   {"help", no_argument, NULL, 0},
+	                                   {"begin-time", required_argument, NULL, 0},
+	                                   {"display-svp-file", required_argument, NULL, 0},
+	                                   {"edit-svp-file", required_argument, NULL, 0},
+	                                   {"end-time", required_argument, NULL, 0},
+	                                   {"format", required_argument, NULL, 0},
+	                                   {"input", required_argument, NULL, 0},
+	                                   {NULL, 0, NULL, 0}};
+	int option_index;
+
 	/* process argument list */
-	while ((c = getopt(argc, argv, "B:b:E:e:F:f:I:i:S:s:W:w:VvHh")) != -1)
+	while ((c = getopt_long(argc, argv, "B:b:E:e:F:f:I:i:S:s:W:w:VvHh", options, &option_index)) != -1)
 		switch (c) {
+		/* long options all return c=0 */
+		case 0:
+			if (strcmp("verbose", options[option_index].name) == 0) {
+				verbose++;
+			}
+			else if (strcmp("help", options[option_index].name) == 0) {
+				help++;
+			}
+			else if (strcmp("begin-time", options[option_index].name) == 0) {
+				sscanf(optarg, "%d/%d/%d/%d/%d/%d", &btime_i[0], &btime_i[1], &btime_i[2], &btime_i[3], &btime_i[4], &btime_i[5]);
+				btime_i[6] = 0;
+			}
+			else if (strcmp("display-svp-file", options[option_index].name) == 0) {
+				sscanf(optarg, "%s", sfile);
+			}
+			else if (strcmp("edit-svp-file", options[option_index].name) == 0) {
+				sscanf(optarg, "%s", wfile);
+			}
+			else if (strcmp("end-time", options[option_index].name) == 0) {
+				sscanf(optarg, "%d/%d/%d/%d/%d/%d", &etime_i[0], &etime_i[1], &etime_i[2], &etime_i[3], &etime_i[4], &etime_i[5]);
+				etime_i[6] = 0;
+			}
+			else if (strcmp("format", options[option_index].name) == 0) {
+				sscanf(optarg, "%d", &format);
+			}
+			else if (strcmp("input", options[option_index].name) == 0) {
+				sscanf(optarg, "%s", ifile);
+			}
+			break;
 		case 'H':
 		case 'h':
 			help++;

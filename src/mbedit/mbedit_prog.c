@@ -162,8 +162,17 @@ static const char help_message[] =
     "anomalous beams. Flagging is handled internally by setting\n"
     "depth values negative, so that no information is lost.";
 static const char usage_message[] =
-    "mbedit [-Byr/mo/da/hr/mn/sc -D  -Eyr/mo/da/hr/mn/sc \n\t-Fformat "
-    "-Ifile -Ooutfile -S -X -V -H]";
+    "mbedit\n"
+    "\t--begin-time=yr/mo/da/hr/mn/sc {-Byr/mo/da/hr/mn/sc}\n"
+    "\t--browse {-D}\n"
+    "\t--end-time=yr/mo/da/hr/mn/sc {-Eyr/mo/da/hr/mn/sc}\n"
+    "\t--format=format_id {-Fformat_id}\n"
+    "\t--gui-mode {-G}\n"
+    "\t--help {-H}\n"
+    "\t--input=file {-Ifile}\n"
+    "\t--run-mbprocess {-X}\n"
+    "\t--use-edit-save {-S}\n"
+    "\t--verbose {-V}\n\n";
 
 /* status variables */
 static int error = MB_ERROR_NO_ERROR;
@@ -309,7 +318,7 @@ static int ncolors;
 static unsigned int pixel_values[256];
 
 /*--------------------------------------------------------------------*/
-int mbedit_init(int argc, char **argv, int *startup_file) {
+int mbedit_init(int argc, char **argv, int *startup_file, int *startup_use_esf) {
 	int status = mb_defaults(verbose, &format, &pings, &lonflip, bounds, btime_i, etime_i, &speedmin, &timegap);
 	status = mb_uselockfiles(verbose, &uselockfiles);
 	format = 0;
@@ -338,14 +347,65 @@ int mbedit_init(int argc, char **argv, int *startup_file) {
 	strcpy(ifile, "");
 
 	int fileflag = 0;
+	bool use_esf = false;
 
 	int errflg = 0;
 	int c;
 	int help = 0;
 
+	static struct option options[] = {{"verbose", no_argument, NULL, 0},
+	                                   {"help", no_argument, NULL, 0},
+	                                   {"begin-time", required_argument, NULL, 0},
+	                                   {"browse", no_argument, NULL, 0},
+	                                   {"end-time", required_argument, NULL, 0},
+	                                   {"format", required_argument, NULL, 0},
+	                                   {"gui-mode", no_argument, NULL, 0},
+	                                   {"input", required_argument, NULL, 0},
+	                                   {"run-mbprocess", no_argument, NULL, 0},
+	                                   {"use-edit-save", no_argument, NULL, 0},
+	                                   {NULL, 0, NULL, 0}};
+	int option_index;
+
 	/* process argument list */
-	while ((c = getopt(argc, argv, "VvHhB:b:DdE:e:F:f:GgI:i:SsXx")) != -1) {
+	while ((c = getopt_long(argc, argv, "VvHhB:b:DdE:e:F:f:GgI:i:SsXx", options, &option_index)) != -1) {
 		switch (c) {
+		/* long options all return c=0 */
+		case 0:
+			if (strcmp("verbose", options[option_index].name) == 0) {
+				verbose++;
+			}
+			else if (strcmp("help", options[option_index].name) == 0) {
+				help++;
+			}
+			else if (strcmp("begin-time", options[option_index].name) == 0) {
+				sscanf(optarg, "%d/%d/%d/%d/%d/%d", &btime_i[0], &btime_i[1], &btime_i[2], &btime_i[3], &btime_i[4], &btime_i[5]);
+				btime_i[6] = 0;
+			}
+			else if (strcmp("browse", options[option_index].name) == 0) {
+				output_mode = MBEDIT_OUTPUT_BROWSE;
+			}
+			else if (strcmp("end-time", options[option_index].name) == 0) {
+				sscanf(optarg, "%d/%d/%d/%d/%d/%d", &etime_i[0], &etime_i[1], &etime_i[2], &etime_i[3], &etime_i[4], &etime_i[5]);
+				etime_i[6] = 0;
+			}
+			else if (strcmp("format", options[option_index].name) == 0) {
+				sscanf(optarg, "%d", &format);
+			}
+			else if (strcmp("gui-mode", options[option_index].name) == 0) {
+				gui_mode = true;
+			}
+			else if (strcmp("input", options[option_index].name) == 0) {
+				sscanf(optarg, "%1023s", ifile);
+				do_parse_datalist(ifile, format);
+				fileflag++;
+			}
+			else if (strcmp("run-mbprocess", options[option_index].name) == 0) {
+				run_mbprocess = true;
+			}
+			else if (strcmp("use-edit-save", options[option_index].name) == 0) {
+				use_esf = true;
+			}
+			break;
 		case 'H':
 		case 'h':
 			help++;
@@ -385,6 +445,10 @@ int mbedit_init(int argc, char **argv, int *startup_file) {
 		case 'X':
 		case 'x':
 			run_mbprocess = true;
+			break;
+		case 'S':
+		case 's':
+			use_esf = true;
 			break;
 		case '?':
 			errflg++;
@@ -433,11 +497,13 @@ int mbedit_init(int argc, char **argv, int *startup_file) {
 
 	/* if file specified then use it */
 	*startup_file = fileflag > 0;
+	*startup_use_esf = use_esf;
 
 	if (verbose >= 2) {
 		fprintf(stderr, "\ndbg2  MBIO function <%s> completed\n", __func__);
 		fprintf(stderr, "dbg2  Return values:\n");
 		fprintf(stderr, "dbg2       startup_file: %d\n", *startup_file);
+		fprintf(stderr, "dbg2       startup_use_esf: %d\n", *startup_use_esf);
 		fprintf(stderr, "dbg2       error:        %d\n", error);
 		fprintf(stderr, "dbg2  Return status:\n");
 		fprintf(stderr, "dbg2       status:  %d\n", status);

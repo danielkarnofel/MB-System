@@ -33,6 +33,7 @@
  */
 
 #include <ctype.h>
+#include <getopt.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -227,8 +228,39 @@ int mbeditviz_init(int argc, char **argv,
   int c;
   int help = 0;
 
-  while ((c = getopt(argc, argv, "VvHhF:f:GgI:i:Rr")) != -1)
+  static struct option options[] = {{"verbose", no_argument, NULL, 0},
+                                     {"help", no_argument, NULL, 0},
+                                     {"delete-input-file", no_argument, NULL, 0},
+                                     {"format", required_argument, NULL, 0},
+                                     {"input", required_argument, NULL, 0},
+                                     {"simple-mean-grid", no_argument, NULL, 0},
+                                     {NULL, 0, NULL, 0}};
+  int option_index;
+
+  while ((c = getopt_long(argc, argv, "VvHhF:f:GgI:i:Rr", options, &option_index)) != -1)
     switch (c) {
+    /* long options all return c=0 */
+    case 0:
+      if (strcmp("verbose", options[option_index].name) == 0) {
+        mbev_verbose++;
+      }
+      else if (strcmp("help", options[option_index].name) == 0) {
+        help++;
+      }
+      else if (strcmp("delete-input-file", options[option_index].name) == 0) {
+        delete_input_file = true;
+      }
+      else if (strcmp("format", options[option_index].name) == 0) {
+        sscanf(optarg, "%d", &mbdef_format);
+      }
+      else if (strcmp("input", options[option_index].name) == 0) {
+        sscanf(optarg, "%s", ifile);
+        input_file_set = true;
+      }
+      else if (strcmp("simple-mean-grid", options[option_index].name) == 0) {
+        mbev_grid_algorithm = MBEV_GRID_ALGORITHM_SIMPLEMEAN;
+      }
+      break;
     case 'H':
     case 'h':
       help++;

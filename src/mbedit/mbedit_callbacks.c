@@ -172,6 +172,7 @@ int status;
 
 /* file opening parameters */
 int startup_file = 0;
+int startup_use_esf = 0;
 int numfiles = 0;
 int currentfile = -1;
 int currentfile_shown = -1;
@@ -448,7 +449,7 @@ void do_mbedit_init(int argc, char **argv) {
 	status = mbedit_set_scaling(mb_borders, mshow_time);
 
 	/* initialize mbedit proper */
-	status = mbedit_init(argc, argv, &startup_file);
+	status = mbedit_init(argc, argv, &startup_file, &startup_use_esf);
 
 	/* set up the widgets */
 	do_setup_data();
@@ -460,7 +461,16 @@ void do_mbedit_init(int argc, char **argv) {
 
 	/* if startup indicated by num_files > 0 try to open first file */
 	if (startup_file && numfiles > 0) {
-		do_load_specific_file(0);
+		/* if requested at startup, use any existing edit save file for the
+		   first file without popping up the interactive "use previous edits?"
+		   dialog - this only applies to the initial startup load */
+		if (startup_use_esf) {
+			currentfile = 0;
+			(void)do_load(true);
+		}
+		else {
+			do_load_specific_file(0);
+		}
 	}
 
 	/* finally allow expose plots */

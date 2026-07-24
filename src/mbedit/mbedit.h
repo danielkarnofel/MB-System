@@ -32,7 +32,7 @@
  * Date:	October 14, 2009
  */
 
-int mbedit_init(int argc, char **argv, int *startup_file);
+int mbedit_init(int argc, char **argv, int *startup_file, int *startup_use_esf);
 int mbedit_set_graphics(void *xgid, int ncol, unsigned int *pixels);
 int mbedit_set_scaling(int *brdr, int sh_time);
 int mbedit_set_filters(int f_m, int f_m_t, int f_m_x, int f_m_l, int f_w, int f_w_t, int f_b, int f_b_b, int f_b_e, int f_d,

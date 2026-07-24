@@ -60,7 +60,17 @@ constexpr char program_name[] = "MBsegylist";
 constexpr char help_message[] =
     "MBsegylist lists table data from a segy data file.";
 constexpr char usage_message[] =
-    "MBsegylist -Ifile [-A -Ddecimate -Gdelimiter -Llonflip -Olist -H -V]";
+    "MBsegylist -Ifile\n"
+    "\t--binary-output {-A}\n"
+    "\t--decimate=value {-Dvalue}\n"
+    "\t--delimiter=character {-Gcharacter}\n"
+    "\t--help {-H}\n"
+    "\t--input=file {-Ifile}\n"
+    "\t--longitude-domain=lonflip {-Llonflip}\n"
+    "\t--output-format=list {-Olist}\n"
+    "\t--segment-tag=tag {-Ztag}\n"
+    "\t--use-feet {-W}\n"
+    "\t--verbose {-V}\n\n";
 
 /*--------------------------------------------------------------------*/
 int printsimplevalue(int verbose, double value, int width, int precision, bool ascii, bool *invert, bool *flipsign, int *error) {
@@ -179,6 +189,7 @@ int main(int argc, char **argv) {
 	char delimiter[MB_PATH_MAXLINE] = "\t";
 	bool segment = false;
 	char segment_tag[MB_PATH_MAXLINE] = "";
+	bool bathy_in_feet = false;
 
 	char file[MB_PATH_MAXLINE] = "";
 
@@ -214,11 +225,62 @@ int main(int argc, char **argv) {
 
 	/* process argument list */
 	{
+		static struct option options[] = {{"verbose", no_argument, nullptr, 0},
+		                                   {"help", no_argument, nullptr, 0},
+		                                   {"binary-output", no_argument, nullptr, 0},
+		                                   {"decimate", required_argument, nullptr, 0},
+		                                   {"delimiter", required_argument, nullptr, 0},
+		                                   {"input", required_argument, nullptr, 0},
+		                                   {"longitude-domain", required_argument, nullptr, 0},
+		                                   {"output-format", required_argument, nullptr, 0},
+		                                   {"segment-tag", required_argument, nullptr, 0},
+		                                   {"use-feet", no_argument, nullptr, 0},
+		                                   {nullptr, 0, nullptr, 0}};
+
 		bool errflg = false;
 		int c;
+		int option_index;
 		bool help = false;
-		while ((c = getopt(argc, argv, "AaD:d:G:g:I:i:L:l:O:o:VvWwZ:z:Hh")) != -1)
+		while ((c = getopt_long(argc, argv, "AaD:d:G:g:I:i:L:l:O:o:VvWwZ:z:Hh", options, &option_index)) != -1)
 			switch (c) {
+			/* long options all return c=0 */
+			case 0:
+				if (strcmp("verbose", options[option_index].name) == 0) {
+					verbose++;
+				}
+				else if (strcmp("help", options[option_index].name) == 0) {
+					help = true;
+				}
+				else if (strcmp("binary-output", options[option_index].name) == 0) {
+					ascii = false;
+				}
+				else if (strcmp("decimate", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &decimate);
+				}
+				else if (strcmp("delimiter", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", delimiter);
+				}
+				else if (strcmp("input", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", file);
+				}
+				else if (strcmp("longitude-domain", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &lonflip);
+				}
+				else if (strcmp("output-format", options[option_index].name) == 0) {
+					n_list = 0;
+					for (int j = 0; j < (int)strlen(optarg) && n_list < MAX_OPTIONS; j++) {
+						list[n_list] = optarg[j];
+						n_list++;
+					}
+				}
+				else if (strcmp("segment-tag", options[option_index].name) == 0) {
+					segment = true;
+					sscanf(optarg, "%1023s", segment_tag);
+				}
+				else if (strcmp("use-feet", options[option_index].name) == 0) {
+					bathy_in_feet = true;
+				}
+				break;
 			case 'H':
 			case 'h':
 				help = true;
@@ -226,6 +288,10 @@ int main(int argc, char **argv) {
 			case 'V':
 			case 'v':
 				verbose++;
+				break;
+			case 'W':
+			case 'w':
+				bathy_in_feet = true;
 				break;
 			case 'A':
 			case 'a':
@@ -319,6 +385,9 @@ int main(int argc, char **argv) {
 			exit(error);
 		}
 	}
+
+	/* set depth scaling */
+	const double bathy_scale = bathy_in_feet ? 1.0 / 0.3048 : 1.0;
 
 	void *mbsegyioptr;
 	struct mb_segyasciiheader_struct asciiheader;
@@ -715,6 +784,7 @@ int main(int argc, char **argv) {
 						sensordepth = factor * traceheader.src_depth;
 					else
 						sensordepth = 0.0;
+					sensordepth *= bathy_scale;
 					printsimplevalue(verbose, sensordepth, 11, 6, ascii, &invert_next_value, &signflip_next_value, &error);
 					break;
 				case 'z': /* water depth (m) */
@@ -728,6 +798,7 @@ int main(int argc, char **argv) {
 						waterdepth = -factor * traceheader.grp_wbd;
 					else
 						waterdepth = 0.0;
+					waterdepth *= bathy_scale;
 					printsimplevalue(verbose, waterdepth, 11, 6, ascii, &invert_next_value, &signflip_next_value, &error);
 					break;
 				default:

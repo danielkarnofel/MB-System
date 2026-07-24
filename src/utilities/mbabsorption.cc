@@ -104,6 +104,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <getopt.h>
 #include <unistd.h>
 
@@ -116,7 +117,15 @@ constexpr char help_message[] =
     "in dB/km as a function of frequency, temperature, salinity,\n"
     "sound speed, pH, and depth.";
 constexpr char usage_message[] =
-    "mbabsorption [-Csoundspeed -Ddepth -Ffrequency -Pph -Ssalinity -Ttemperature -V -H]";
+    "mbabsorption\n"
+    "\t--depth=depth {-Ddepth}\n"
+    "\t--frequency=frequency {-Ffrequency}\n"
+    "\t--help {-H}\n"
+    "\t--ph=ph {-Pph}\n"
+    "\t--salinity=salinity {-Ssalinity}\n"
+    "\t--sound-speed=soundspeed {-Csoundspeed}\n"
+    "\t--temperature=temperature {-Ttemperature}\n"
+    "\t--verbose {-V}\n\n";
 
 /*--------------------------------------------------------------------*/
 
@@ -133,10 +142,48 @@ int main(int argc, char **argv) {
 	/* process argument list */
 	bool help = false;
 	{
+		static struct option options[] = {{"verbose", no_argument, nullptr, 0},
+		                                  {"help", no_argument, nullptr, 0},
+		                                  {"sound-speed", required_argument, nullptr, 0},
+		                                  {"depth", required_argument, nullptr, 0},
+		                                  {"frequency", required_argument, nullptr, 0},
+		                                  {"ph", required_argument, nullptr, 0},
+		                                  {"salinity", required_argument, nullptr, 0},
+		                                  {"temperature", required_argument, nullptr, 0},
+		                                  {nullptr, 0, nullptr, 0}};
+
 		bool errflg = false;
 		int c;
-		while ((c = getopt(argc, argv, "VvHhC:c:D:d:F:f:P:p:S:s:T:t:")) != -1)
+		int option_index;
+		while ((c = getopt_long(argc, argv, "VvHhC:c:D:d:F:f:P:p:S:s:T:t:", options, &option_index)) != -1)
 			switch (c) {
+			/* long options all return c=0 */
+			case 0:
+				if (strcmp("verbose", options[option_index].name) == 0) {
+					verbose++;
+				}
+				else if (strcmp("help", options[option_index].name) == 0) {
+					help = true;
+				}
+				else if (strcmp("sound-speed", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf", &soundspeed);
+				}
+				else if (strcmp("depth", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf", &depth);
+				}
+				else if (strcmp("frequency", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf", &frequency);
+				}
+				else if (strcmp("ph", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf", &ph);
+				}
+				else if (strcmp("salinity", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf", &salinity);
+				}
+				else if (strcmp("temperature", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf", &temperature);
+				}
+				break;
 			case 'H':
 			case 'h':
 				help = true;

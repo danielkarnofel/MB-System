@@ -60,7 +60,14 @@ constexpr char help_message[] =
     "mbextractsegy or mb7k2ss to extract subbottom (or sidescan) data into files\n"
     "corresponding to the lines between waypoints.";
 constexpr char usage_message[] =
-    "mbroutetime  -Rroutefile [-Fformat -Ifile -Owaypointtimefile -Urangethreshold -H -V]";
+    "mbroutetime  -Rroutefile [-Fformat -Ifile -Owaypointtimefile -Urangethreshold -H -V]\n\n"
+    "\t--format=format_id {-Fformat_id}\n"
+    "\t--help {-H}\n"
+    "\t--input=file {-Ifile}\n"
+    "\t--output=waypointtimefile {-Owaypointtimefile}\n"
+    "\t--range-threshold=rangethreshold {-Urangethreshold}\n"
+    "\t--route-file=routefile {-Rroutefile}\n"
+    "\t--verbose {-V}\n";
 
 /*--------------------------------------------------------------------*/
 
@@ -85,12 +92,47 @@ int main(int argc, char **argv) {
 	strcpy(read_file, "datalist.mb-1");
 
 	{
+		static struct option options[] = {{"verbose", no_argument, nullptr, 0},
+		                                  {"help", no_argument, nullptr, 0},
+		                                  {"format", required_argument, nullptr, 0},
+		                                  {"input", required_argument, nullptr, 0},
+		                                  {"output", required_argument, nullptr, 0},
+		                                  {"range-threshold", required_argument, nullptr, 0},
+		                                  {"route-file", required_argument, nullptr, 0},
+		                                  {nullptr, 0, nullptr, 0}};
+
 		bool errflg = false;
 		int c;
+		int option_index;
 		bool help = false;
 		/* process argument list */
-		while ((c = getopt(argc, argv, "F:f:I:i:O:o:R:r:U:u:VvHh")) != -1)
+		while ((c = getopt_long(argc, argv, "F:f:I:i:O:o:R:r:U:u:VvHh", options, &option_index)) != -1)
 			switch (c) {
+			/* long options all return c=0 */
+			case 0:
+				if (strcmp("verbose", options[option_index].name) == 0) {
+					verbose++;
+				}
+				else if (strcmp("help", options[option_index].name) == 0) {
+					help = true;
+				}
+				else if (strcmp("format", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &format);
+				}
+				else if (strcmp("input", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", read_file);
+				}
+				else if (strcmp("output", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", output_file);
+					output_file_set = true;
+				}
+				else if (strcmp("range-threshold", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf", &rangethreshold);
+				}
+				else if (strcmp("route-file", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", route_file);
+				}
+				break;
 			case 'H':
 			case 'h':
 				help = true;

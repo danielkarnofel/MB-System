@@ -165,7 +165,7 @@ constexpr char help_message[] = "mbfilter applies one or more simple filters to 
     "data, and the hi-pass filters can be used to emphasize\n\t"
     "fine scale structure in the data.\n\t"
     "The default input and output streams are stdin and stdout.\n";
-constexpr char usage_message[] =
+constexpr char usage_message_old[] =
     "mbfilter ["
     "-Akind -Byr/mo/da/hr/mn/sc\n\t"
     "-Cmode/xdim/ldim/iteration\n\t"
@@ -173,6 +173,21 @@ constexpr char usage_message[] =
     "-Eyr/mo/da/hr/mn/sc -Fformat -Iinfile -Nbuffersize\n\t"
     "-Rwest/east/south/north -Smode/xdim/ldim/iteration\n\t"
     "-Tthreshold -V -H]";
+constexpr char usage_message[] =
+    "mbfilter\n"
+    "\t--begin-time=yr/mo/da/hr/mn/sc {-Byr/mo/da/hr/mn/sc}\n"
+    "\t--bounds=west/east/south/north {-Rwest/east/south/north}\n"
+    "\t--buffer-size=buffersize {-Nbuffersize}\n"
+    "\t--contrast-filter=mode/xdim/ldim/iteration {-Cmode/xdim/ldim/iteration}\n"
+    "\t--data-kind=kind {-Akind}\n"
+    "\t--end-time=yr/mo/da/hr/mn/sc {-Eyr/mo/da/hr/mn/sc}\n"
+    "\t--format=format {-Fformat}\n"
+    "\t--help {-H}\n"
+    "\t--hipass-filter=mode/xdim/ldim/iteration/offset {-Dmode/xdim/ldim/iteration/offset}\n"
+    "\t--input=infile {-Iinfile}\n"
+    "\t--smooth-filter=mode/xdim/ldim/iteration/threshold_lo/threshold_hi {-Smode/xdim/ldim/iteration/threshold_lo/threshold_hi}\n"
+    "\t--threshold=threshold_lo/threshold_hi {-Tthreshold_lo/threshold_hi}\n"
+    "\t--verbose {-V}\n\n";
 
 /*--------------------------------------------------------------------*/
 int hipass_mean(int verbose, int n, const double *val, double *wgt, double *hipass) {
@@ -690,12 +705,148 @@ int main(int argc, char **argv) {
 	int n_buffer_max = MBFILTER_BUFFER_DEFAULT;
 
 	{
+		static struct option options[] = {{"verbose", no_argument, nullptr, 0},
+		                                  {"help", no_argument, nullptr, 0},
+		                                  {"data-kind", required_argument, nullptr, 0},
+		                                  {"begin-time", required_argument, nullptr, 0},
+		                                  {"contrast-filter", required_argument, nullptr, 0},
+		                                  {"hipass-filter", required_argument, nullptr, 0},
+		                                  {"end-time", required_argument, nullptr, 0},
+		                                  {"format", required_argument, nullptr, 0},
+		                                  {"input", required_argument, nullptr, 0},
+		                                  {"buffer-size", required_argument, nullptr, 0},
+		                                  {"bounds", required_argument, nullptr, 0},
+		                                  {"smooth-filter", required_argument, nullptr, 0},
+		                                  {"threshold", required_argument, nullptr, 0},
+		                                  {nullptr, 0, nullptr, 0}};
+
 		bool errflg = 0;
 		int c;
+		int option_index;
 		bool help = 0;
-		while ((c = getopt(argc, argv, "A:a:B:b:C:c:D:d:E:e:F:f:HhI:i:N:n:R:r:S:s:T:t:Vv")) != -1)
+		while ((c = getopt_long(argc, argv, "A:a:B:b:C:c:D:d:E:e:F:f:HhI:i:N:n:R:r:S:s:T:t:Vv", options, &option_index)) != -1)
 		{
 			switch (c) {
+			case 0:
+				if (strcmp("verbose", options[option_index].name) == 0) {
+					verbose++;
+				}
+				else if (strcmp("help", options[option_index].name) == 0) {
+					help = true;
+				}
+				else if (strcmp("data-kind", options[option_index].name) == 0) {
+					int tmp;
+					sscanf(optarg, "%d", &tmp);
+					datakind = (filter_kind_t)tmp;
+					if (datakind != MBFILTER_SS && datakind != MBFILTER_AMP)
+						datakind = MBFILTER_SS;
+				}
+				else if (strcmp("begin-time", options[option_index].name) == 0) {
+					sscanf(optarg, "%d/%d/%d/%d/%d/%d", &btime_i[0], &btime_i[1], &btime_i[2], &btime_i[3], &btime_i[4], &btime_i[5]);
+					btime_i[6] = 0;
+				}
+				else if (strcmp("contrast-filter", options[option_index].name) == 0) {
+					if (num_filters >= MBFILTER_NFILTER_MAX) {
+						fprintf(stderr, "\nToo many filters specified (max %d) - ignoring: -C%s\n", MBFILTER_NFILTER_MAX, optarg);
+						break;
+					}
+					int tmp;
+					const int n = sscanf(optarg, "%d/%d/%d/%d", &tmp, &contrast_xdim, &contrast_ldim, &contrast_iter);
+					contrast_mode = (contrast_mode_t)tmp;
+					if (n >= 3) {
+						filters[num_filters].mode = static_cast<filter_a_mode_t>(contrast_mode + 7);
+						filters[num_filters].xdim = contrast_xdim;
+						filters[num_filters].ldim = contrast_ldim;
+						filters[num_filters].threshold = false;
+					}
+					if (n >= 4)
+						filters[num_filters].iteration = contrast_iter;
+					else
+						filters[num_filters].iteration = 1;
+					if (n >= 3)
+						num_filters++;
+				}
+				else if (strcmp("hipass-filter", options[option_index].name) == 0) {
+					if (num_filters >= MBFILTER_NFILTER_MAX) {
+						fprintf(stderr, "\nToo many filters specified (max %d) - ignoring: -D%s\n", MBFILTER_NFILTER_MAX, optarg);
+						break;
+					}
+					int tmp;
+					const int n = sscanf(optarg, "%d/%d/%d/%d/%lf", &tmp, &hipass_xdim, &hipass_ldim, &hipass_iter, &hipass_offset);
+					hipass_mode = (hipass_mode_t)tmp;  // TODO(schwehr): Range check.
+					if (n >= 3) {
+						filters[num_filters].mode = static_cast<filter_a_mode_t>(hipass_mode + 0);
+						filters[num_filters].xdim = hipass_xdim;
+						filters[num_filters].ldim = hipass_ldim;
+						filters[num_filters].threshold = false;
+					}
+					if (n >= 4)
+						filters[num_filters].iteration = hipass_iter;
+					else
+						filters[num_filters].iteration = 1;
+					if (n >= 5)
+						filters[num_filters].hipass_offset = hipass_offset;
+					else
+						filters[num_filters].hipass_offset = 1000.0;
+					if (n >= 3)
+						num_filters++;
+				}
+				else if (strcmp("end-time", options[option_index].name) == 0) {
+					sscanf(optarg, "%d/%d/%d/%d/%d/%d", &etime_i[0], &etime_i[1], &etime_i[2], &etime_i[3], &etime_i[4], &etime_i[5]);
+					etime_i[6] = 0;
+				}
+				else if (strcmp("format", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &format);
+				}
+				else if (strcmp("input", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", read_file);
+				}
+				else if (strcmp("buffer-size", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &n_buffer_max);
+					if (n_buffer_max > MBFILTER_BUFFER_DEFAULT || n_buffer_max < 10)
+						n_buffer_max = MBFILTER_BUFFER_DEFAULT;
+				}
+				else if (strcmp("bounds", options[option_index].name) == 0) {
+					mb_get_bounds(optarg, bounds);
+				}
+				else if (strcmp("smooth-filter", options[option_index].name) == 0) {
+					if (num_filters >= MBFILTER_NFILTER_MAX) {
+						fprintf(stderr, "\nToo many filters specified (max %d) - ignoring: -S%s\n", MBFILTER_NFILTER_MAX, optarg);
+						break;
+					}
+					int tmp;
+					const int n = sscanf(optarg, "%d/%d/%d/%d/%lf/%lf", &tmp, &smooth_xdim, &smooth_ldim, &smooth_iter, &threshold_lo,
+					           &threshold_hi);
+					smooth_mode = (smooth_mode_t)tmp;  // TODO(schwehr): Range check.
+					if (n >= 3) {
+						filters[num_filters].mode = static_cast<filter_a_mode_t>(smooth_mode + 3);
+						filters[num_filters].xdim = smooth_xdim;
+						filters[num_filters].ldim = smooth_ldim;
+					}
+					if (n >= 4)
+						filters[num_filters].iteration = smooth_iter;
+					else
+						filters[num_filters].iteration = 1;
+					if (n >= 6) {
+						filters[num_filters].threshold = true;
+						filters[num_filters].threshold_lo = threshold_lo;
+						filters[num_filters].threshold_hi = threshold_hi;
+					}
+					else if (apply_threshold) {
+						filters[num_filters].threshold = true;
+						filters[num_filters].threshold_lo = threshold_lo;
+						filters[num_filters].threshold_hi = threshold_hi;
+					}
+					else
+						filters[num_filters].threshold = false;
+					if (n >= 3)
+						num_filters++;
+				}
+				else if (strcmp("threshold", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf/%lf", &threshold_lo, &threshold_hi);
+					apply_threshold = true;
+				}
+				break;
 			case 'A':
 			case 'a':
 			{

@@ -58,7 +58,23 @@ constexpr char help_message[] =
     "\tThe results are dumped to stdout.";
 constexpr char usage_message[] =
     "mbhistogram [-Akind -Byr/mo/da/hr/mn/sc -Dmin/max -Eyr/mo/da/hr/mn/sc -Fformat -G -Ifile -Llonflip "
-    "-Mnintervals -Nnbins -Ppings -Rw/e/s/n -Sspeed -V -H]";
+    "-Mnintervals -Nnbins -Ppings -Rw/e/s/n -Sspeed -V -H]\n"
+    "\t--begin-time=yr/mo/da/hr/mn/sc {-Byr/mo/da/hr/mn/sc}\n"
+    "\t--bins=nbins {-Nnbins}\n"
+    "\t--bounds=west/east/south/north {-Rwest/east/south/north}\n"
+    "\t--data-type=kind {-Akind}\n"
+    "\t--end-time=yr/mo/da/hr/mn/sc {-Eyr/mo/da/hr/mn/sc}\n"
+    "\t--format=format_id {-Fformat_id}\n"
+    "\t--gaussian {-G}\n"
+    "\t--help {-H}\n"
+    "\t--input=[file | datalist] {-Ifile}\n"
+    "\t--intervals=nintervals {-Mnintervals}\n"
+    "\t--longitude-domain=lonflip {-Llonflip}\n"
+    "\t--pings=pings {-Ppings}\n"
+    "\t--speed-minimum=speed {-Sspeed}\n"
+    "\t--time-gap=timegap {-Ttimegap}\n"
+    "\t--value-range=min/max {-Dmin/max}\n"
+    "\t--verbose {-V}\n";
 
 /*--------------------------------------------------------------------*/
 
@@ -132,12 +148,87 @@ int main(int argc, char **argv) {
 	FILE *output;
 
 	{
+		static struct option options[] = {{"verbose", no_argument, nullptr, 0},
+		                                   {"help", no_argument, nullptr, 0},
+		                                   {"begin-time", required_argument, nullptr, 0},
+		                                   {"bins", required_argument, nullptr, 0},
+		                                   {"bounds", required_argument, nullptr, 0},
+		                                   {"data-type", required_argument, nullptr, 0},
+		                                   {"end-time", required_argument, nullptr, 0},
+		                                   {"format", required_argument, nullptr, 0},
+		                                   {"gaussian", no_argument, nullptr, 0},
+		                                   {"input", required_argument, nullptr, 0},
+		                                   {"intervals", required_argument, nullptr, 0},
+		                                   {"longitude-domain", required_argument, nullptr, 0},
+		                                   {"pings", required_argument, nullptr, 0},
+		                                   {"speed-minimum", required_argument, nullptr, 0},
+		                                   {"time-gap", required_argument, nullptr, 0},
+		                                   {"value-range", required_argument, nullptr, 0},
+		                                   {nullptr, 0, nullptr, 0}};
+
 		bool errflg = false;
 		bool help = false;
+		int option_index;
 		int c;
-		while ((c = getopt(argc, argv, "A:a:B:b:D:d:E:e:F:f:GgHhI:i:L:l:M:m:N:n:P:p:R:r:S:s:T:t:Vv")) != -1)
+		while ((c = getopt_long(argc, argv, "A:a:B:b:D:d:E:e:F:f:GgHhI:i:L:l:M:m:N:n:P:p:R:r:S:s:T:t:Vv", options, &option_index)) != -1)
 		{
 			switch (c) {
+			/* long options all return c=0 */
+			case 0:
+				if (strcmp("verbose", options[option_index].name) == 0) {
+					verbose++;
+				}
+				else if (strcmp("help", options[option_index].name) == 0) {
+					help = true;
+				}
+				else if (strcmp("begin-time", options[option_index].name) == 0) {
+					sscanf(optarg, "%d/%d/%d/%d/%d/%d", &btime_i[0], &btime_i[1], &btime_i[2], &btime_i[3], &btime_i[4], &btime_i[5]);
+					btime_i[6] = 0;
+				}
+				else if (strcmp("bins", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &nbins);
+				}
+				else if (strcmp("bounds", options[option_index].name) == 0) {
+					mb_get_bounds(optarg, bounds);
+				}
+				else if (strcmp("data-type", options[option_index].name) == 0) {
+					int tmp;
+					sscanf(optarg, "%d", &tmp);
+					// TODO(schwehr): Range check.
+					mode = (histogram_mode_t)tmp;
+				}
+				else if (strcmp("end-time", options[option_index].name) == 0) {
+					sscanf(optarg, "%d/%d/%d/%d/%d/%d", &etime_i[0], &etime_i[1], &etime_i[2], &etime_i[3], &etime_i[4], &etime_i[5]);
+					etime_i[6] = 0;
+				}
+				else if (strcmp("format", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &format);
+				}
+				else if (strcmp("gaussian", options[option_index].name) == 0) {
+					gaussian = true;
+				}
+				else if (strcmp("input", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", read_file);
+				}
+				else if (strcmp("intervals", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &nintervals);
+				}
+				else if (strcmp("longitude-domain", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &lonflip);
+				}
+				else if (strcmp("pings", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &pings);
+				}
+				else if (strcmp("speed-minimum", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf", &speedmin);
+				}
+				else if (strcmp("time-gap", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf", &timegap);
+				}
+				else if (strcmp("value-range", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf/%lf", &value_min, &value_max);
+				}
+				break;
 			case 'A':
 			case 'a':
 			{

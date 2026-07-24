@@ -70,10 +70,19 @@ constexpr char help_message[] =
     "mbsegypsd calculates the power spectral density function of each trace in a segy data file,\n"
     "outputting the results as a GMT grid file.";
 constexpr char usage_message[] =
-    "mbsegypsd -Ifile -Oroot [-Ashotscale\n"
-    "          -Ddecimatex -R\n"
-    "          -Smode[/start/end[/schan/echan]] -Tsweep[/delay]\n"
-    "          -Wmode/start/end -H -V]";
+    "mbsegypsd\n"
+    "\t--decimate=decimatex {-Ddecimatex}\n"
+    "\t--fft-length=nfft {-Nnfft}\n"
+    "\t--help {-H}\n"
+    "\t--input=file {-Ifile}\n"
+    "\t--log-scale {-L}\n"
+    "\t--output=root {-Oroot}\n"
+    "\t--reserved {-P}\n"
+    "\t--shot-scale=shotscale[/frequencyscale] {-Ashotscale[/frequencyscale]}\n"
+    "\t--time-sweep=sweep[/delay] {-Tsweep[/delay]}\n"
+    "\t--trace-range=mode[/start/end[/schan/echan]] {-Smode[/start/end[/schan/echan]]}\n"
+    "\t--verbose {-V}\n"
+    "\t--window=mode/start/end {-Wmode/start/end}\n";
 
 /*--------------------------------------------------------------------*/
 /*
@@ -230,11 +239,80 @@ int main(int argc, char **argv) {
 	int ngridxy = 0;
 
 	{
+		static struct option options[] = {{"verbose", no_argument, nullptr, 0},
+		                                  {"help", no_argument, nullptr, 0},
+		                                  {"decimate", required_argument, nullptr, 0},
+		                                  {"fft-length", required_argument, nullptr, 0},
+		                                  {"input", required_argument, nullptr, 0},
+		                                  {"log-scale", no_argument, nullptr, 0},
+		                                  {"output", required_argument, nullptr, 0},
+		                                  {"shot-scale", required_argument, nullptr, 0},
+		                                  {"time-sweep", required_argument, nullptr, 0},
+		                                  {"trace-range", required_argument, nullptr, 0},
+		                                  {"window", required_argument, nullptr, 0},
+		                                  {nullptr, 0, nullptr, 0}};
+
+		int option_index;
 		bool errflg = false;
 		int c;
 		bool help = false;
-		while ((c = getopt(argc, argv, "A:a:D:d:I:i:LlN:n:O:o:PpS:s:T:t:VvW:w:Hh")) != -1)
+		while ((c = getopt_long(argc, argv, "A:a:D:d:I:i:LlN:n:O:o:S:s:T:t:VvW:w:Hh", options, &option_index)) != -1)
 			switch (c) {
+			/* long options all return c=0 */
+			case 0:
+				if (strcmp("verbose", options[option_index].name) == 0) {
+					verbose++;
+				}
+				else if (strcmp("help", options[option_index].name) == 0) {
+					help = true;
+				}
+				else if (strcmp("decimate", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &decimatex);
+				}
+				else if (strcmp("fft-length", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &nfft);
+				}
+				else if (strcmp("input", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", segyfile);
+				}
+				else if (strcmp("log-scale", options[option_index].name) == 0) {
+					logscale = true;
+				}
+				else if (strcmp("output", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", fileroot);
+				}
+				else if (strcmp("shot-scale", options[option_index].name) == 0) {
+					const int n = sscanf(optarg, "%lf/%lf", &shotscale, &frequencyscale);
+					if (n == 2)
+						scale2distance = true;
+				}
+				else if (strcmp("time-sweep", options[option_index].name) == 0) {
+					const int n = sscanf(optarg, "%lf/%lf", &timesweep, &timedelay);
+					if (n < 2)
+						timedelay = 0.0;
+				}
+				else if (strcmp("trace-range", options[option_index].name) == 0) {
+					int tracemode_tmp;
+					const int n = sscanf(optarg, "%d/%d/%d/%d/%d", &tracemode_tmp, &tracestart, &traceend, &chanstart, &chanend);
+					tracemode = (tracemode_t)tracemode_tmp;  // TODO(Schwehr): Range check.
+					if (n < 5) {
+						chanstart = 0;
+						chanend = -1;
+					}
+					if (n < 3) {
+						tracestart = 0;
+						traceend = 0;
+					}
+					if (n < 1) {
+						tracemode = MBSEGYPSD_USESHOT;
+					}
+				}
+				else if (strcmp("window", options[option_index].name) == 0) {
+					int windowmode_tmp;
+					sscanf(optarg, "%d/%lf/%lf", &windowmode_tmp, &windowstart, &windowend);
+					windowmode = (windowmode_t)windowmode_tmp;  // TODO(Schwehr): Range check.
+				}
+				break;
 			case 'H':
 			case 'h':
 				help = true;

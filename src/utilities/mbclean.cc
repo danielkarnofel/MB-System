@@ -69,6 +69,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <getopt.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -130,11 +131,31 @@ constexpr char help_message[] =
     "Several algorithms are available for identifying artifacts;\n"
     "multiple algorithms can be applied in a single pass.\n";
 constexpr char usage_message[] =
-    "mbclean [-Amax -Blow/high -Cslope/unit -Dmin/max\n"
-    "\t-Fformat -Gfraction_low/fraction_high -Iinfile -Krange_min\n"
-    "\t-Llonflip -Mmode Ntolerance -Ooutfile -Pmin_speed/max_speed -Q -Rmaxheadingrate\n"
-    "\t-Sspike_slope/mode/format -Ttolerance -Wwest/east/south/north \n"
-    "\t-Xbeamsleft/beamsright -Ydistanceleft/distanceright[/mode] -Z\n\t-V -H]\n\n";
+    "mbclean\n"
+    "\t--bounds=west/east/south/north {-Wwest/east/south/north}\n"
+    "\t--depth-range=low/high {-Blow/high}\n"
+    "\t--deviation-max=max {-Amax}\n"
+    "\t--distance-range=min/max {-Dmin/max}\n"
+    "\t--flag-distance-angle=distanceleft/distanceright[/mode] {-Ydistanceleft/distanceright[/mode]}\n"
+    "\t--format=format {-Fformat}\n"
+    "\t--fraction-range=fraction_low/fraction_high {-Gfraction_low/fraction_high}\n"
+    "\t--help {-H}\n"
+    "\t--input=infile {-Iinfile}\n"
+    "\t--lonflip=lonflip {-Llonflip}\n"
+    "\t--max-acrosstrack=max_acrosstrack {-Emax_acrosstrack}\n"
+    "\t--max-heading-rate=maxheadingrate {-Rmaxheadingrate}\n"
+    "\t--max-slope=slope/unit {-Cslope/unit}\n"
+    "\t--min-good-beams=num_good_min {-Unum_good_min}\n"
+    "\t--mode=mode {-Mmode}\n"
+    "\t--ping-deviation-tolerance=tolerance {-Ntolerance}\n"
+    "\t--range-min=range_min {-Krange_min}\n"
+    "\t--speed-range=min_speed/max_speed {-Pmin_speed/max_speed}\n"
+    "\t--spike-max=spike_slope/mode/format {-Sspike_slope/mode/format}\n"
+    "\t--timestamp-tolerance=tolerance {-Ttolerance}\n"
+    "\t--verbose {-V}\n"
+    "\t--zap-beams=beamsleft/beamsright {-Xbeamsleft/beamsright}\n"
+    "\t--zap-rails=backup_dist {-Qbackup_dist}\n"
+    "\t--zero-position {-Z}\n\n";
 
 /*--------------------------------------------------------------------*/
 /* edit output function */
@@ -284,12 +305,182 @@ int main(int argc, char **argv) {
   char read_file[MB_PATH_MAXLINE] = "datalist.mb-1";
 
   {
+    static struct option options[] = {{"verbose", no_argument, nullptr, 0},
+                                      {"help", no_argument, nullptr, 0},
+                                      {"deviation-max", required_argument, nullptr, 0},
+                                      {"depth-range", required_argument, nullptr, 0},
+                                      {"max-slope", required_argument, nullptr, 0},
+                                      {"distance-range", required_argument, nullptr, 0},
+                                      {"max-acrosstrack", required_argument, nullptr, 0},
+                                      {"format", required_argument, nullptr, 0},
+                                      {"fraction-range", required_argument, nullptr, 0},
+                                      {"range-min", required_argument, nullptr, 0},
+                                      {"input", required_argument, nullptr, 0},
+                                      {"lonflip", required_argument, nullptr, 0},
+                                      {"mode", required_argument, nullptr, 0},
+                                      {"ping-deviation-tolerance", required_argument, nullptr, 0},
+                                      {"speed-range", required_argument, nullptr, 0},
+                                      {"zap-rails", required_argument, nullptr, 0},
+                                      {"max-heading-rate", required_argument, nullptr, 0},
+                                      {"spike-max", required_argument, nullptr, 0},
+                                      {"timestamp-tolerance", required_argument, nullptr, 0},
+                                      {"min-good-beams", required_argument, nullptr, 0},
+                                      {"bounds", required_argument, nullptr, 0},
+                                      {"zap-beams", required_argument, nullptr, 0},
+                                      {"flag-distance-angle", required_argument, nullptr, 0},
+                                      {"zero-position", no_argument, nullptr, 0},
+                                      {nullptr, 0, nullptr, 0}};
+
     bool errflg = false;
     int c;
+    int option_index;
     bool help = false;
-    while ((c = getopt(argc, argv, "VvHhA:a:B:b:C:c:D:d:E:e:F:f:G:g:K:k:L:l:I:i:M:m:N:n:Q:q:P:p:R:r:S:s:T:t:U:u:W:w:X:x:Y:y:Zz")) !=
+    while ((c = getopt_long(argc, argv, "VvHhA:a:B:b:C:c:D:d:E:e:F:f:G:g:K:k:L:l:I:i:M:m:N:n:Q:q:P:p:R:r:S:s:T:t:U:u:W:w:X:x:Y:y:Zz",
+                             options, &option_index)) !=
            -1) {
       switch (c) {
+      /* long options all return c=0 */
+      case 0:
+        if (strcmp("verbose", options[option_index].name) == 0) {
+          verbose++;
+        }
+        else if (strcmp("help", options[option_index].name) == 0) {
+          help = true;
+        }
+        else if (strcmp("deviation-max", options[option_index].name) == 0) {
+          sscanf(optarg, "%lf", &deviation_max);
+          check_deviation = true;
+        }
+        else if (strcmp("depth-range", options[option_index].name) == 0) {
+          sscanf(optarg, "%lf/%lf", &depth_low, &depth_high);
+          check_range = true;
+        }
+        else if (strcmp("max-slope", options[option_index].name) == 0) {
+          slope_form = 0;
+          sscanf(optarg, "%lf/%d", &slopemax, &slope_form);
+          check_slope = true;
+          if (slope_form == 1)
+            slopemax = tan(slopemax);
+          else if (slope_form == 2)
+            slopemax = tan(DTR * slopemax);
+        }
+        else if (strcmp("distance-range", options[option_index].name) == 0) {
+          sscanf(optarg, "%lf/%lf", &distancemin, &distancemax);
+        }
+        else if (strcmp("max-acrosstrack", options[option_index].name) == 0) {
+          sscanf(optarg, "%lf", &max_acrosstrack);
+          zap_long_across = true;
+        }
+        else if (strcmp("format", options[option_index].name) == 0) {
+          sscanf(optarg, "%d", &format);
+        }
+        else if (strcmp("fraction-range", options[option_index].name) == 0) {
+          sscanf(optarg, "%lf/%lf", &fraction_low, &fraction_high);
+          check_fraction = true;
+        }
+        else if (strcmp("range-min", options[option_index].name) == 0) {
+          sscanf(optarg, "%lf", &range_min);
+          check_range_min = true;
+        }
+        else if (strcmp("input", options[option_index].name) == 0) {
+          sscanf(optarg, "%1023s", read_file);
+        }
+        else if (strcmp("lonflip", options[option_index].name) == 0) {
+          sscanf(optarg, "%d", &lonflip);
+        }
+        else if (strcmp("mode", options[option_index].name) == 0) {
+          int tmp;
+          sscanf(optarg, "%d", &tmp);
+          mode = (clean_mode_t)tmp;  // TODO(schwehr): Range check.
+        }
+        else if (strcmp("ping-deviation-tolerance", options[option_index].name) == 0) {
+          sscanf(optarg, "%lf", &ping_deviation_tolerance);
+          check_ping_deviation = true;
+        }
+        else if (strcmp("speed-range", options[option_index].name) == 0) {
+          sscanf(optarg, "%lf/%lf", &speed_low, &speed_high);
+          check_speed_good = true;
+        }
+        else if (strcmp("zap-rails", options[option_index].name) == 0) {
+          zap_rails = true;
+          backup_dist = 0.0;
+          sscanf(optarg, "%lf", &backup_dist);
+        }
+        else if (strcmp("max-heading-rate", options[option_index].name) == 0) {
+          zap_max_heading_rate = true;
+          sscanf(optarg, "%lf", &max_heading_rate);
+        }
+        else if (strcmp("spike-max", options[option_index].name) == 0) {
+          slope_form = 0;
+          sscanf(optarg, "%lf/%d/%d", &spikemax, &spike_mode, &slope_form);
+          check_spike = true;
+          if (2 == slope_form)
+            spikemax = tan(DTR * spikemax);
+          if (1 == slope_form)
+            spikemax = tan(spikemax);
+        }
+        else if (strcmp("timestamp-tolerance", options[option_index].name) == 0) {
+          fix_edit_timestamps = true;
+          sscanf(optarg, "%lf", &tolerance);
+        }
+        else if (strcmp("min-good-beams", options[option_index].name) == 0) {
+          sscanf(optarg, "%d", &num_good_min);
+          check_num_good_min = true;
+        }
+        else if (strcmp("bounds", options[option_index].name) == 0) {
+          check_position_bounds = true;
+          sscanf(optarg, "%lf/%lf/%lf/%lf", &west, &east, &south, &north);
+        }
+        else if (strcmp("zap-beams", options[option_index].name) == 0) {
+          const int n = sscanf(optarg, "%d/%d", &zap_beams_left, &zap_beams_right);
+          if (n == 1)
+            zap_beams_right = zap_beams_left;
+          zap_beams = true;
+        }
+        else if (strcmp("flag-distance-angle", options[option_index].name) == 0) {
+          int optiony_mode_tmp;
+          const int n = sscanf(optarg, "%lf/%lf/%d", &left, &right, &optiony_mode_tmp);
+          if (n == 1) {
+            flag_distance_left = -fabs(left);
+            flag_distance_right = fabs(left);
+            flag_distance = true;
+          }
+          else if (n == 2) {
+            flag_distance_left = left;
+            flag_distance_right = right;
+            flag_distance = true;
+          }
+          else if (n == 3) {
+            if (optiony_mode_tmp >= 1 && optiony_mode_tmp <= 4)
+              optiony_mode = (y_mode_t)optiony_mode_tmp;
+            else
+              optiony_mode = MBCLEAN_Y_MODE_DISTANCE_FLAG;
+            if (optiony_mode == MBCLEAN_Y_MODE_DISTANCE_FLAG) {
+              flag_distance_left = left;
+              flag_distance_right = right;
+              flag_distance = true;
+            }
+            else if (optiony_mode == MBCLEAN_Y_MODE_DISTANCE_UNFLAG) {
+              unflag_distance_left = left;
+              unflag_distance_right = right;
+              unflag_distance = true;
+            }
+            else if (optiony_mode == MBCLEAN_Y_MODE_ANGLE_FLAG) {
+              flag_angle_left = left;
+              flag_angle_right = right;
+              flag_angle = true;
+            }
+            else if (optiony_mode == MBCLEAN_Y_MODE_ANGLE_UNFLAG) {
+              unflag_angle_left = left;
+              unflag_angle_right = right;
+              unflag_angle = true;
+            }
+          }
+        }
+        else if (strcmp("zero-position", options[option_index].name) == 0) {
+          check_zero_position = true;
+        }
+        break;
       case 'H':
       case 'h':
         help = true;

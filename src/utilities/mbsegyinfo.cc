@@ -47,7 +47,12 @@ constexpr char program_name[] = "MBsegyinfo";
 constexpr char help_message[] =
     "MBsegyinfo lists table data from a segy data file.";
 constexpr char usage_message[] =
-    "MBsegyinfo -Ifile [-Llonflip -O -H -V]";
+    "MBsegyinfo -Ifile [-Llonflip -O -H -V]\n"
+    "\t--help {-H}\n"
+    "\t--input=file {-Ifile}\n"
+    "\t--longitude-domain=lonflip {-Llonflip}\n"
+    "\t--output-file {-O}\n"
+    "\t--verbose {-V}\n";
 
 /*--------------------------------------------------------------------*/
 
@@ -69,12 +74,38 @@ int main(int argc, char **argv) {
 
 	/* process argument list */
 	{
+		static struct option options[] = {{"help", no_argument, nullptr, 0},
+		                                  {"input", required_argument, nullptr, 0},
+		                                  {"longitude-domain", required_argument, nullptr, 0},
+		                                  {"output-file", no_argument, nullptr, 0},
+		                                  {"verbose", no_argument, nullptr, 0},
+		                                  {nullptr, 0, nullptr, 0}};
+
 		bool errflg = false;
 		bool help = false;
 		int c;
-		while ((c = getopt(argc, argv, "I:i:L:l:OoVvWwHh")) != -1)
+		int option_index;
+		while ((c = getopt_long(argc, argv, "I:i:L:l:OoVvWwHh", options, &option_index)) != -1)
 		{
 			switch (c) {
+			/* long options all return c=0 */
+			case 0:
+				if (strcmp("help", options[option_index].name) == 0) {
+					help = true;
+				}
+				else if (strcmp("input", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", read_file);
+				}
+				else if (strcmp("longitude-domain", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &lonflip);
+				}
+				else if (strcmp("output-file", options[option_index].name) == 0) {
+					output_usefile = true;
+				}
+				else if (strcmp("verbose", options[option_index].name) == 0) {
+					verbose++;
+				}
+				break;
 			case 'H':
 			case 'h':
 				help = true;

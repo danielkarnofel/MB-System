@@ -84,9 +84,24 @@ constexpr char help_message[] =
     "output data formats may differ, though not all possible combinations\n"
     "make sense.  The default input and output streams are stdin and stdout.";
 constexpr char usage_message[] =
-    "mbcopy [-Byr/mo/da/hr/mn/sc -Ccommentfile -D -Eyr/mo/da/hr/mn/sc\n"
-    "\t-Fiformat/oformat/mformat -H -Iinfile -Llonflip -Mmergefile -N -Ooutfile\n"
-    "\t-Ppings -Qsleep_factor -Rw/e/s/n -Sspeed -V]";
+    "mbcopy\n"
+    "\t--bathymetry-only {-D}\n"
+    "\t--begin-time=yr/mo/da/hr/mn/sc {-Byr/mo/da/hr/mn/sc}\n"
+    "\t--bounds=west/east/south/north {-Rwest/east/south/north}\n"
+    "\t--comment-file=commentfile {-Ccommentfile}\n"
+    "\t--end-time=yr/mo/da/hr/mn/sc {-Eyr/mo/da/hr/mn/sc}\n"
+    "\t--format=iformat/oformat/mformat {-Fiformat/oformat/mformat}\n"
+    "\t--help {-H}\n"
+    "\t--input=infile {-Iinfile}\n"
+    "\t--lonflip=lonflip {-Llonflip}\n"
+    "\t--merge-file=mergefile {-Mmergefile}\n"
+    "\t--output=outfile {-Ooutfile}\n"
+    "\t--ping-average=pings {-Ppings}\n"
+    "\t--sleep-factor=sleep_factor {-Qsleep_factor}\n"
+    "\t--speed-minimum=speed {-Sspeed}\n"
+    "\t--strip-comments {-N}\n"
+    "\t--time-gap=timegap {-Ttimegap}\n"
+    "\t--verbose {-V}\n";
 
 /*--------------------------------------------------------------------*/
 int setup_transfer_rules(int verbose, int ibeams, int obeams, int *istart, int *iend, int *offset, int *error) {
@@ -1667,11 +1682,105 @@ int main(int argc, char **argv) {
   bool use_sleep = false;
 
   {
+    static struct option options[] = {{"begin-time", required_argument, nullptr, 0},
+                                      {"comment-file", required_argument, nullptr, 0},
+                                      {"bathymetry-only", no_argument, nullptr, 0},
+                                      {"end-time", required_argument, nullptr, 0},
+                                      {"format", required_argument, nullptr, 0},
+                                      {"help", no_argument, nullptr, 0},
+                                      {"input", required_argument, nullptr, 0},
+                                      {"lonflip", required_argument, nullptr, 0},
+                                      {"merge-file", required_argument, nullptr, 0},
+                                      {"strip-comments", no_argument, nullptr, 0},
+                                      {"output", required_argument, nullptr, 0},
+                                      {"ping-average", required_argument, nullptr, 0},
+                                      {"sleep-factor", required_argument, nullptr, 0},
+                                      {"bounds", required_argument, nullptr, 0},
+                                      {"speed-minimum", required_argument, nullptr, 0},
+                                      {"time-gap", required_argument, nullptr, 0},
+                                      {"verbose", no_argument, nullptr, 0},
+                                      {nullptr, 0, nullptr, 0}};
+
+    int option_index;
     bool errflg = false;
     int c;
     bool help = false;
-    while ((c = getopt(argc, argv, "B:b:C:c:DdE:e:F:f:HhI:i:L:l:M:m:NnO:o:P:p:Q:q:R:r:S:s:T:t:Vv")) != -1)
+    while ((c = getopt_long(argc, argv, "B:b:C:c:DdE:e:F:f:HhI:i:L:l:M:m:NnO:o:P:p:Q:q:R:r:S:s:T:t:Vv", options, &option_index)) != -1)
       switch (c) {
+      /* long options all return c=0 */
+      case 0:
+        if (strcmp("begin-time", options[option_index].name) == 0) {
+          double seconds;
+          sscanf(optarg, "%d/%d/%d/%d/%d/%lf", &btime_i[0], &btime_i[1], &btime_i[2], &btime_i[3], &btime_i[4], &seconds);
+          btime_i[5] = (int)floor(seconds);
+          btime_i[6] = 1000000 * (seconds - btime_i[5]);
+        }
+        else if (strcmp("comment-file", options[option_index].name) == 0) {
+          sscanf(optarg, "%1023s", commentfile);
+          insertcomments = true;
+        }
+        else if (strcmp("bathymetry-only", options[option_index].name) == 0) {
+          bathonly = true;
+        }
+        else if (strcmp("end-time", options[option_index].name) == 0) {
+          double seconds;
+          sscanf(optarg, "%d/%d/%d/%d/%d/%lf", &etime_i[0], &etime_i[1], &etime_i[2], &etime_i[3], &etime_i[4], &seconds);
+          etime_i[5] = (int)floor(seconds);
+          etime_i[6] = 1000000 * (seconds - etime_i[5]);
+        }
+        else if (strcmp("format", options[option_index].name) == 0) {
+          const int i = sscanf(optarg, "%d/%d/%d", &iformat, &oformat, &mformat);
+          if (i == 1)
+            oformat = iformat;
+        }
+        else if (strcmp("help", options[option_index].name) == 0) {
+          help = true;
+        }
+        else if (strcmp("input", options[option_index].name) == 0) {
+          sscanf(optarg, "%1023s", ifile);
+        }
+        else if (strcmp("lonflip", options[option_index].name) == 0) {
+          sscanf(optarg, "%d", &lonflip);
+        }
+        else if (strcmp("merge-file", options[option_index].name) == 0) {
+          const int i = sscanf(optarg, "%1023s", mfile);
+          if (i == 1)
+            merge = true;
+        }
+        else if (strcmp("strip-comments", options[option_index].name) == 0) {
+          if (stripmode == MBCOPY_STRIPMODE_NONE) {
+            stripmode = MBCOPY_STRIPMODE_COMMENTS;
+          } else if (stripmode == MBCOPY_STRIPMODE_COMMENTS) {
+            stripmode = MBCOPY_STRIPMODE_BATHYONLY;
+          } else {
+            fprintf(stderr, "Failure: Gave -n more than twice.\n");
+            exit(MB_ERROR_BAD_USAGE);
+          }
+        }
+        else if (strcmp("output", options[option_index].name) == 0) {
+          sscanf(optarg, "%1023s", ofile);
+        }
+        else if (strcmp("ping-average", options[option_index].name) == 0) {
+          sscanf(optarg, "%d", &pings);
+        }
+        else if (strcmp("sleep-factor", options[option_index].name) == 0) {
+          sscanf(optarg, "%lf", &sleep_factor);
+          use_sleep = true;
+        }
+        else if (strcmp("bounds", options[option_index].name) == 0) {
+          mb_get_bounds(optarg, bounds);
+        }
+        else if (strcmp("speed-minimum", options[option_index].name) == 0) {
+          sscanf(optarg, "%lf", &speedmin);
+        }
+        else if (strcmp("time-gap", options[option_index].name) == 0) {
+          sscanf(optarg, "%lf", &timegap);
+        }
+        else if (strcmp("verbose", options[option_index].name) == 0) {
+          verbose++;
+        }
+        break;
+
       case 'B':
       case 'b':
       {

@@ -53,7 +53,16 @@ constexpr char help_message[] =
     "MBFORMAT is an utility which identifies the swath data formats\n"
     "associated with MBIO format id's.  If no format id is specified,\n"
     "MBFORMAT lists all of the currently supported formats.";
-constexpr char usage_message[] = "mbformat [-Fformat -Ifile -L -K -V -W -H]";
+constexpr char usage_message_old[] = "mbformat [-Fformat -Ifile -L -K -V -W -H]";
+constexpr char usage_message[] =
+    "mbformat\n"
+    "\t--format=format_id {-Fformat_id}\n"
+    "\t--help {-H}\n"
+    "\t--html {-W}\n"
+    "\t--input=file {-Ifile}\n"
+    "\t--list-ids {-L}\n"
+    "\t--list-root {-K}\n"
+    "\t--verbose {-V}\n";
 
 /*--------------------------------------------------------------------*/
 int main(int argc, char **argv) {
@@ -67,11 +76,46 @@ int main(int argc, char **argv) {
 
 	/* process argument list */
 	{
+		static struct option options[] = {{"format", required_argument, nullptr, 0},
+		                                  {"help", no_argument, nullptr, 0},
+		                                  {"html", no_argument, nullptr, 0},
+		                                  {"input", required_argument, nullptr, 0},
+		                                  {"list-ids", no_argument, nullptr, 0},
+		                                  {"list-root", no_argument, nullptr, 0},
+		                                  {"verbose", no_argument, nullptr, 0},
+		                                  {nullptr, 0, nullptr, 0}};
+
 		bool errflg = false;
 		bool help = false;
 		int c;
-		while ((c = getopt(argc, argv, "F:f:HhI:i:LlKkVvWw")) != -1)
+		int option_index;
+		while ((c = getopt_long(argc, argv, "F:f:HhI:i:LlKkVvWw", options, &option_index)) != -1)
 			switch (c) {
+			case 0:
+				if (strcmp("format", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &format);
+					format_specified = true;
+				}
+				else if (strcmp("list-ids", options[option_index].name) == 0) {
+					list_mode = MBFORMAT_LIST_SIMPLE;
+				}
+				else if (strcmp("list-root", options[option_index].name) == 0) {
+					list_mode = MBFORMAT_LIST_ROOT;
+				}
+				else if (strcmp("help", options[option_index].name) == 0) {
+					help = true;
+				}
+				else if (strcmp("input", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", file);
+					file_specified = true;
+				}
+				else if (strcmp("verbose", options[option_index].name) == 0) {
+					verbose++;
+				}
+				else if (strcmp("html", options[option_index].name) == 0) {
+					html = true;
+				}
+				break;
 			case 'F':
 			case 'f':
 				sscanf(optarg, "%d", &format);

@@ -86,10 +86,21 @@ constexpr char program_name[] = "MBsegygrid";
 constexpr char help_message[] =
     "MBsegygrid grids trace data from segy data files.";
 constexpr char usage_message[] =
-    "MBsegygrid -Ifile -Oroot [-Ashotscale/timescale\n"
-    "          -Ddecimatex/decimatey -Gmode/gain[/window] -Rdistancebin[]/startlon/startlat/endlon/endlat]\n"
-    "          -Smode[/start/end[/schan/echan]] -Tsweep[/delay]\n"
-    "          -Wmode/start/end -H -V]";
+    "MBsegygrid -Ifile -Oroot\n"
+    "\t--agc=agcmaxvalue/agcwindow {-Bagcmaxvalue/agcwindow}\n"
+    "\t--decimation=decimatex/decimatey {-Ddecimatex/decimatey}\n"
+    "\t--distance-plot=distancebin/startlon/endlon/startlat/endlat {-Rdistancebin/startlon/endlon/startlat/endlat}\n"
+    "\t--filter=filtermode/filterwindow {-Ffiltermode/filterwindow}\n"
+    "\t--gain=gainmode/gain[/gainwindow[/gaindelay]] {-Ggainmode/gain[/gainwindow[/gaindelay]]}\n"
+    "\t--geometry=geometrymode {-Cgeometrymode}\n"
+    "\t--help {-H}\n"
+    "\t--input=file {-Ifile}\n"
+    "\t--output=fileroot {-Ofileroot}\n"
+    "\t--scale-to-distance=shotscale/timescale {-Ashotscale/timescale}\n"
+    "\t--time-sweep=timesweep[/timedelay] {-Ttimesweep[/timedelay]}\n"
+    "\t--trace-mode=tracemode[/tracestart/traceend[/chanstart/chanend]] {-Stracemode[/tracestart/traceend[/chanstart/chanend]]}\n"
+    "\t--verbose {-V}\n"
+    "\t--window=windowmode/windowstart/windowend {-Wwindowmode/windowstart/windowend}\n\n";
 
 /*--------------------------------------------------------------------*/
 /*
@@ -279,11 +290,120 @@ int main(int argc, char **argv) {
 
 	/* process argument list */
 	{
+		static struct option options[] = {{"agc", required_argument, nullptr, 0},
+		                                  {"decimation", required_argument, nullptr, 0},
+		                                  {"distance-plot", required_argument, nullptr, 0},
+		                                  {"filter", required_argument, nullptr, 0},
+		                                  {"gain", required_argument, nullptr, 0},
+		                                  {"geometry", required_argument, nullptr, 0},
+		                                  {"help", no_argument, nullptr, 0},
+		                                  {"input", required_argument, nullptr, 0},
+		                                  {"output", required_argument, nullptr, 0},
+		                                  {"scale-to-distance", required_argument, nullptr, 0},
+		                                  {"time-sweep", required_argument, nullptr, 0},
+		                                  {"trace-mode", required_argument, nullptr, 0},
+		                                  {"verbose", no_argument, nullptr, 0},
+		                                  {"window", required_argument, nullptr, 0},
+		                                  {nullptr, 0, nullptr, 0}};
+
 		bool errflg = false;
 		int c;
+		int option_index;
 		bool help = false;
-		while ((c = getopt(argc, argv, "A:a:B:b:C:c:D:d:F:f:G:g:I:i:O:o:R:r:S:s:T:t:VvW:w:Hh")) != -1)
+		while ((c = getopt_long(argc, argv, "A:a:B:b:C:c:D:d:F:f:G:g:I:i:O:o:R:r:S:s:T:t:VvW:w:Hh", options, &option_index)) != -1)
 			switch (c) {
+			case 0:
+				if (strcmp("scale-to-distance", options[option_index].name) == 0) {
+					const int n = sscanf(optarg, "%lf/%lf", &shotscale, &timescale);
+					if (n == 2)
+						scale2distance = true;
+				}
+				else if (strcmp("agc", options[option_index].name) == 0) {
+					const int n = sscanf(optarg, "%lf/%lf", &agcmaxvalue, &agcwindow);
+					if (n < 2)
+						agcwindow = 0.0;
+					agcmode = true;
+				}
+				else if (strcmp("geometry", options[option_index].name) == 0) {
+					int geometrymode_tmp;
+					const int n = sscanf(optarg, "%d", &geometrymode_tmp);
+					geometrymode = (geometrymode_t)geometrymode_tmp;  // TODO(schwehr): Range check
+					if (n < 1)
+						geometrymode = MBSEGYGRID_GEOMETRY_VERTICAL;
+				}
+				else if (strcmp("decimation", options[option_index].name) == 0) {
+					/* n = */ sscanf(optarg, "%d/%d", &decimatex, &decimatey);
+				}
+				else if (strcmp("filter", options[option_index].name) == 0) {
+					int filtermode_tmp;
+					/* n = */ sscanf(optarg, "%d/%lf", &filtermode_tmp, &filterwindow);
+					filtermode = (filtermode_t)filtermode_tmp;  // TODO(schwehr): Range check
+				}
+				else if (strcmp("gain", options[option_index].name) == 0) {
+					int gainmode_tmp;
+					const int n = sscanf(optarg, "%d/%lf/%lf/%lf", &gainmode_tmp, &gain, &gainwindow, &gaindelay);
+					gainmode = (gainmode_t)gainmode_tmp;  // TODO(schwehr): Range check
+					if (n < 4)
+						gaindelay = 0.0;
+					if (n < 3)
+						gainwindow = 0.0;
+				}
+				else if (strcmp("input", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", segyfile);
+				}
+				else if (strcmp("output", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", fileroot);
+				}
+				else if (strcmp("distance-plot", options[option_index].name) == 0) {
+					const int n = sscanf(optarg, "%lf/%lf/%lf/%lf/%lf", &distancebin, &startlon, &endlon, &startlat, &endlat);
+					plotmode = MBSEGYGRID_PLOTBYDISTANCE;
+					if (n < 1) {
+						distancebin = 1.0;
+					}
+					if (n < 25) {
+						startlon = 0.0;
+						startlat = 0.0;
+						endlon = 0.0;
+						endlat = 0.0;
+					}
+				}
+				else if (strcmp("trace-mode", options[option_index].name) == 0) {
+					int tracemode_tmp;
+					const int n = sscanf(optarg, "%d/%d/%d/%d/%d", &tracemode_tmp, &tracestart, &traceend, &chanstart, &chanend);
+					tracemode = (useshot_t)tracemode_tmp;  // TODO(schwehr): Range check.
+					if (n < 5) {
+						chanstart = 0;
+						chanend = -1;
+					}
+					if (n < 3) {
+						tracestart = 0;
+						traceend = 0;
+					}
+					if (n < 1) {
+						tracemode = MBSEGYGRID_USESHOT;
+					}
+					else {
+						tracemode_set = true;
+					}
+				}
+				else if (strcmp("time-sweep", options[option_index].name) == 0) {
+					const int n = sscanf(optarg, "%lf/%lf", &timesweep, &timedelay);
+					if (n < 2)
+						timedelay = 0.0;
+				}
+				else if (strcmp("window", options[option_index].name) == 0) {
+					// TODO(schwehr): Check n to make sure all 3 parts are read.
+					int windowmode_tmp;
+					/* n = */ sscanf(optarg, "%d/%lf/%lf", &windowmode_tmp, &windowstart, &windowend);
+					windowmode = (windowmode_t)windowmode_tmp;  // TODO(schwehr): Range check
+				}
+				else if (strcmp("verbose", options[option_index].name) == 0) {
+					verbose++;
+				}
+				else if (strcmp("help", options[option_index].name) == 0) {
+					help = true;
+				}
+				break;
 			case 'H':
 			case 'h':
 				help = true;

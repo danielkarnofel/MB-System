@@ -376,6 +376,28 @@ were never actually wired into either build system to begin with. Updated both t
 and autotools build files for src/man/man1 and src/html to remove the now-dangling
 references to these three pages.
 
+Programs in src/utilities: Added long-option (--long-name) equivalents to every remaining
+command-line program in src/utilities that previously supported only traditional single-letter
+options, extending the getopt_long() support already in place for about 15 other utilities
+(mbinfo, mbdatalist, mbpreprocess, mbsslayout, mbvoxelclean, etc.). This covers 31 programs:
+mb7k2jstar, mbabsorption, mbareaclean, mbauvloglist, mbbackangle, mbclean, mbcopy, mbctdlist,
+mbdefaults, mbextractsegy, mbfilter, mbformat, mbgetesf, mbgrid, mbhistogram, mblevitus, mblist,
+mbmapscale, mbmosaic, mbnavlist, mbprocess, mbrolltimelag, mbroutetime, mbsegygrid, mbsegyinfo,
+mbsegylist, mbsegypsd, mbset, mbsvplist, mbsvpselect, and mbtime. Every existing short option
+continues to work exactly as before; each program's --help output now lists every long/short
+pair. This work surfaced four short options that had been silently accepted by each program's
+option parser for the program's entire history (predating even this repository's 2019 move from
+Subversion to Git) with no corresponding case handler at all - inert no-ops with no effect and
+no documentation anywhere. Investigating each: mbsegylist's -W turned out to be real,
+unimplemented functionality - mbsegylist is a segy-format sibling of mblist, which has a working
+-W/--use-feet that converts bathymetry and distance output columns from meters to feet, and
+mbsegylist's own man page documents its fixed sonar-depth and water-depth output columns in
+meters, strongly suggesting the
+option string was copied from mblist without ever porting the conversion logic; -W/--use-feet is
+now fully implemented in mbsegylist and documented in its man page. The other three (mbauvloglist's
+-W, mbsegypsd's -P, mbextractsegy's -D) had no discoverable intended purpose anywhere in the code,
+man pages, or usage messages, so rather than guess at functionality they were removed outright.
+
 The bugs described above were identified and fixed with the assistance of the AI coding
 assistant Claude Sonnet 5 (Anthropic, model claude-sonnet-5), operating as Claude Code
 under developer supervision and review.

@@ -101,10 +101,33 @@ constexpr char help_message[] =
     "MBLIST is tailored to produce ascii files in spreadsheet\n"
     "style with data columns separated by tabs.";
 constexpr char usage_message[] =
-    "mblist [-Byr/mo/da/hr/mn/sc -C -Ddump_mode -Eyr/mo/da/hr/mn/sc\n"
-    "    -Fformat -Gdelimiter -H -Ifile -Jprojection -Kdecimate -Llonflip\n"
-    "    -M[beam_start/beam_end | A | X%] -Npixel_start/pixel_end\n"
-    "    -Ooptions -Ppings -Rw/e/s/n -Sspeed -Ttimegap -Ucheck -V -W -Xoutfile -Zsegment]";
+    "mblist\n"
+    "\t--beam-range=beam_start/beam_end|A|Xexcludepercent {-Mbeam_start/beam_end}\n"
+    "\t--begin-time=yr/mo/da/hr/mn/sc {-Byr/mo/da/hr/mn/sc}\n"
+    "\t--binary {-A}\n"
+    "\t--bounds=west/east/south/north {-Rwest/east/south/north}\n"
+    "\t--check-mode=check {-Ucheck}\n"
+    "\t--decimate=decimate {-Kdecimate}\n"
+    "\t--delimiter=delimiter {-Gdelimiter}\n"
+    "\t--dump-mode=dumpmode {-Ddumpmode}\n"
+    "\t--end-time=yr/mo/da/hr/mn/sc {-Eyr/mo/da/hr/mn/sc}\n"
+    "\t--format=format {-Fformat}\n"
+    "\t--help {-H}\n"
+    "\t--input=file {-Ifile}\n"
+    "\t--longitude-domain=lonflip {-Llonflip}\n"
+    "\t--netcdf {-C}\n"
+    "\t--no-value-check {-Q}\n"
+    "\t--output-file=outfile {-Xoutfile}\n"
+    "\t--output-format=output_format {-Ooutput_format}\n"
+    "\t--ping-average=pings {-Ppings}\n"
+    "\t--pixel-range=pixel_start/pixel_end|A {-Npixel_start/pixel_end}\n"
+    "\t--projection=projection {-Jprojection}\n"
+    "\t--secondary-file=secondaryfile {-Ysecondaryfile}\n"
+    "\t--segment=segment {-Zsegment}\n"
+    "\t--speed-minimum=speed {-Sspeed}\n"
+    "\t--time-gap=timegap {-Ttimegap}\n"
+    "\t--use-feet {-W}\n"
+    "\t--verbose {-V}\n\n";
 
 /*--------------------------------------------------------------------*/
 int set_output(int verbose, int beams_bath, int beams_amp, int pixels_ss, bool use_bath, bool use_amp, bool use_ss, dump_mode_t dump_mode,
@@ -825,13 +848,186 @@ int main(int argc, char **argv) {
 
   /* process argument list */
   {
+    static struct option options[] = {{"beam-range", required_argument, nullptr, 0},
+                                      {"begin-time", required_argument, nullptr, 0},
+                                      {"binary", no_argument, nullptr, 0},
+                                      {"bounds", required_argument, nullptr, 0},
+                                      {"check-mode", required_argument, nullptr, 0},
+                                      {"decimate", required_argument, nullptr, 0},
+                                      {"delimiter", required_argument, nullptr, 0},
+                                      {"dump-mode", required_argument, nullptr, 0},
+                                      {"end-time", required_argument, nullptr, 0},
+                                      {"format", required_argument, nullptr, 0},
+                                      {"help", no_argument, nullptr, 0},
+                                      {"input", required_argument, nullptr, 0},
+                                      {"longitude-domain", required_argument, nullptr, 0},
+                                      {"netcdf", no_argument, nullptr, 0},
+                                      {"no-value-check", no_argument, nullptr, 0},
+                                      {"output-file", required_argument, nullptr, 0},
+                                      {"output-format", required_argument, nullptr, 0},
+                                      {"ping-average", required_argument, nullptr, 0},
+                                      {"pixel-range", required_argument, nullptr, 0},
+                                      {"projection", required_argument, nullptr, 0},
+                                      {"secondary-file", required_argument, nullptr, 0},
+                                      {"segment", required_argument, nullptr, 0},
+                                      {"speed-minimum", required_argument, nullptr, 0},
+                                      {"time-gap", required_argument, nullptr, 0},
+                                      {"use-feet", no_argument, nullptr, 0},
+                                      {"verbose", no_argument, nullptr, 0},
+                                      {nullptr, 0, nullptr, 0}};
+
+    int option_index;
     bool errflg = false;
     bool help = false;
     int c;
-    while ((c = getopt(argc, argv, "AaB:b:CcD:d:E:e:F:f:G:g:I:i:J:j:K:k:L:l:M:m:N:n:O:o:P:p:QqR:r:S:s:T:t:U:u:X:x:Y:y:Z:z:VvWwHh")) !=
+    while ((c = getopt_long(argc, argv, "AaB:b:CcD:d:E:e:F:f:G:g:I:i:J:j:K:k:L:l:M:m:N:n:O:o:P:p:QqR:r:S:s:T:t:U:u:X:x:Y:y:Z:z:VvWwHh", options, &option_index)) !=
            -1)
     {
       switch (c) {
+      /* long options all return c=0 */
+      case 0:
+        if (strcmp("beam-range", options[option_index].name) == 0) {
+          if (optarg[0] == 'a' || optarg[0] == 'A') {
+            beam_set = MBLIST_SET_ALL;
+          }
+          else if (optarg[0] == 'x' || optarg[0] == 'X') {
+            beam_set = MBLIST_SET_EXCLUDE_OUTER;
+            sscanf(optarg, "%*c%d", &beam_exclude_percent);
+          }
+          else {
+            sscanf(optarg, "%d/%d", &beam_start, &beam_end);
+            beam_set = MBLIST_SET_ON;
+          }
+        }
+        else if (strcmp("begin-time", options[option_index].name) == 0) {
+          sscanf(optarg, "%d/%d/%d/%d/%d/%d", &btime_i[0], &btime_i[1], &btime_i[2], &btime_i[3], &btime_i[4], &btime_i[5]);
+          btime_i[6] = 0;
+        }
+        else if (strcmp("binary", options[option_index].name) == 0) {
+          ascii = false;
+          netcdf_cdl = false;
+        }
+        else if (strcmp("bounds", options[option_index].name) == 0) {
+          mb_get_bounds(optarg, bounds);
+        }
+        else if (strcmp("check-mode", options[option_index].name) == 0) {
+          if (optarg[0] == 'N')
+            check_nav = true;
+          else {
+            int tmp;
+            sscanf(optarg, "%d", &tmp);
+            check_values = (check_t)tmp;
+            if (check_values < MBLIST_CHECK_ON || check_values > MBLIST_CHECK_OFF_FLAGNAN) {
+              fprintf(stderr, "WARNING: -u/-U: check_values out of range.\n");
+              check_values = MBLIST_CHECK_ON;
+            }
+          }
+        }
+        else if (strcmp("decimate", options[option_index].name) == 0) {
+          sscanf(optarg, "%d", &decimate);
+        }
+        else if (strcmp("delimiter", options[option_index].name) == 0) {
+          sscanf(optarg, "%1023s", delimiter);
+        }
+        else if (strcmp("dump-mode", options[option_index].name) == 0) {
+          int tmp;
+          sscanf(optarg, "%d", &tmp);
+          // TODO(schwehr): Range check tmp.
+          dump_mode = (dump_mode_t)tmp;
+          if (dump_mode == DUMP_MODE_BATH)
+            beam_set = MBLIST_SET_ALL;
+          else if (dump_mode == DUMP_MODE_TOPO)
+            beam_set = MBLIST_SET_ALL;
+          else if (dump_mode == DUMP_MODE_AMP)
+            beam_set = MBLIST_SET_ALL;
+          else if (dump_mode == DUMP_MODE_SS)
+            pixel_set = MBLIST_SET_ALL;
+        }
+        else if (strcmp("end-time", options[option_index].name) == 0) {
+          sscanf(optarg, "%d/%d/%d/%d/%d/%d", &etime_i[0], &etime_i[1], &etime_i[2], &etime_i[3], &etime_i[4], &etime_i[5]);
+          etime_i[6] = 0;
+        }
+        else if (strcmp("format", options[option_index].name) == 0) {
+          sscanf(optarg, "%d", &format);
+        }
+        else if (strcmp("help", options[option_index].name) == 0) {
+          help = true;
+        }
+        else if (strcmp("input", options[option_index].name) == 0) {
+          sscanf(optarg, "%1023s", read_file);
+        }
+        else if (strcmp("longitude-domain", options[option_index].name) == 0) {
+          sscanf(optarg, "%d", &lonflip);
+        }
+        else if (strcmp("netcdf", options[option_index].name) == 0) {
+          netcdf = true;
+        }
+        else if (strcmp("no-value-check", options[option_index].name) == 0) {
+          check_values = MBLIST_CHECK_OFF_RAW;
+        }
+        else if (strcmp("output-file", options[option_index].name) == 0) {
+          sscanf(optarg, "%1023s", output_file);
+        }
+        else if (strcmp("output-format", options[option_index].name) == 0) {
+          if (strcmp(optarg, "%fnv") == 0 || strcmp(optarg, "%FNV") == 0) {
+            strncpy(list, "tMXYHScRPr=X=Y+X+Y", sizeof(list));
+            n_list = strlen(list);
+          } else if (strlen(optarg) > 0) {
+            n_list = MIN(strlen(optarg), MAX_OPTIONS);
+            for (int j = 0; j < n_list; j++){
+              if (j < MAX_OPTIONS) {
+                list[j] = optarg[j];
+                if (list[j] == '^')
+                  use_projection = true;
+              }
+            }
+          }
+        }
+        else if (strcmp("ping-average", options[option_index].name) == 0) {
+          sscanf(optarg, "%d", &pings);
+        }
+        else if (strcmp("pixel-range", options[option_index].name) == 0) {
+          if (optarg[0] == 'a' || optarg[0] == 'A') {
+            pixel_set = MBLIST_SET_ALL;
+          }
+          else {
+            sscanf(optarg, "%d/%d", &pixel_start, &pixel_end);
+            pixel_set = MBLIST_SET_ON;
+          }
+        }
+        else if (strcmp("projection", options[option_index].name) == 0) {
+          sscanf(optarg, "%1023s", projection_pars);
+          use_projection = true;
+        }
+        else if (strcmp("secondary-file", options[option_index].name) == 0) {
+          sscanf(optarg, "%1023s", secondary_file);
+          secondary_file_set = true;
+        }
+        else if (strcmp("segment", options[option_index].name) == 0) {
+          segment = true;
+          sscanf(optarg, "%1023s", segment_tag);
+          if (strcmp(segment_tag, "swathfile") == 0)
+            segment_mode = MBLIST_SEGMENT_MODE_SWATHFILE;
+          else if (strcmp(segment_tag, "datalist") == 0)
+            segment_mode = MBLIST_SEGMENT_MODE_DATALIST;
+          else
+            segment_mode = MBLIST_SEGMENT_MODE_TAG;
+        }
+        else if (strcmp("speed-minimum", options[option_index].name) == 0) {
+          sscanf(optarg, "%lf", &speedmin);
+        }
+        else if (strcmp("time-gap", options[option_index].name) == 0) {
+          sscanf(optarg, "%lf", &timegap);
+        }
+        else if (strcmp("use-feet", options[option_index].name) == 0) {
+          bathy_in_feet = true;
+        }
+        else if (strcmp("verbose", options[option_index].name) == 0) {
+          verbose++;
+        }
+
+        break;
+
       case 'H':
       case 'h':
         help = true;

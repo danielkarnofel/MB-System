@@ -132,7 +132,23 @@ struct printfield {
 
 constexpr char program_name[] = "MBauvloglist";
 constexpr char help_message[] = "MBauvloglist lists table data from an MBARI AUV mission log file.";
-constexpr char usage_message[] = "MBauvloglist -Ifile [-Fprintformat -Llonflip -Olist -Rid -S -H -V]";
+constexpr char usage_message[] =
+    "MBauvloglist\n"
+    "\t--altitude-file=file {-Afile}\n"
+    "\t--angles-degrees {-S}\n"
+    "\t--clip-to-nav {-C}\n"
+    "\t--decimate=value {-Dvalue}\n"
+    "\t--help {-H}\n"
+    "\t--input=file {-Ifile}\n"
+    "\t--lonflip=lonflip {-Llonflip}\n"
+    "\t--nav-file=file {-Nfile}\n"
+    "\t--output-field=name {-Oname}\n"
+    "\t--output-mode=mode {-Mmode}\n"
+    "\t--print-format=format {-Fformat}\n"
+    "\t--print-header {-P}\n"
+    "\t--recalculate-ctd=id {-Rid}\n"
+    "\t--scale=value {-Xvalue}\n"
+    "\t--verbose {-V}\n\n";
 
 /*--------------------------------------------------------------------*/
 
@@ -260,13 +276,118 @@ int main(int argc, char **argv) {
     double scalevalue = 1.0;
 
 	{
+		static struct option options[] = {{"verbose", no_argument, nullptr, 0},
+		                                  {"help", no_argument, nullptr, 0},
+		                                  {"altitude-file", required_argument, nullptr, 0},
+		                                  {"angles-degrees", no_argument, nullptr, 0},
+		                                  {"clip-to-nav", no_argument, nullptr, 0},
+		                                  {"decimate", required_argument, nullptr, 0},
+		                                  {"input", required_argument, nullptr, 0},
+		                                  {"lonflip", required_argument, nullptr, 0},
+		                                  {"nav-file", required_argument, nullptr, 0},
+		                                  {"output-field", required_argument, nullptr, 0},
+		                                  {"output-mode", required_argument, nullptr, 0},
+		                                  {"print-format", required_argument, nullptr, 0},
+		                                  {"print-header", no_argument, nullptr, 0},
+		                                  {"recalculate-ctd", required_argument, nullptr, 0},
+		                                  {"scale", required_argument, nullptr, 0},
+		                                  {nullptr, 0, nullptr, 0}};
+
 		bool errflg = false;
 		int c;
+		int option_index;
 		bool help = false;
 		char printformat[MB_PATH_MAXLINE] = "default";  // TODO(schwehr): Is this used correctly?
-		while ((c = getopt(argc, argv, "A:a:CcD:d:F:f:I:i:L:l:M:m:N:n:O:o:PpR:r:SsVvWwX:x:Hh")) != -1)
+		while ((c = getopt_long(argc, argv, "A:a:CcD:d:F:f:I:i:L:l:M:m:N:n:O:o:PpR:r:SsVvX:x:Hh", options, &option_index)) != -1)
 		{
 			switch (c) {
+			/* long options all return c=0 */
+			case 0:
+				if (strcmp("verbose", options[option_index].name) == 0) {
+					verbose++;
+				}
+				else if (strcmp("help", options[option_index].name) == 0) {
+					help = true;
+				}
+				else if (strcmp("altitude-file", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", altitude_file);
+					altitude_merge = true;
+				}
+				else if (strcmp("angles-degrees", options[option_index].name) == 0) {
+					angles_in_degrees = true;
+				}
+				else if (strcmp("clip-to-nav", options[option_index].name) == 0) {
+					merge_clip = true;
+				}
+				else if (strcmp("decimate", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &decimate);
+				}
+				else if (strcmp("input", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", file);
+				}
+				else if (strcmp("lonflip", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &lonflip);
+				}
+				else if (strcmp("nav-file", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", nav_file);
+					nav_merge = true;
+				}
+				else if (strcmp("output-field", options[option_index].name) == 0) {
+					if (nprintfields >= NFIELDSMAX) {
+						fprintf(stderr, "\nToo many -O print fields specified (max %d) - ignoring: %s\n",
+						        NFIELDSMAX, optarg);
+					}
+					else {
+						/* const int nscan = */ sscanf(optarg, "%1023s", printfields[nprintfields].name);
+						if (strlen(printformat) > 0 && strcmp(printformat, "default") != 0) {
+							printfields[nprintfields].formatset = true;
+							strcpy(printfields[nprintfields].format, printformat);
+						}
+						else {
+							printfields[nprintfields].formatset = false;
+							strcpy(printfields[nprintfields].format, "");
+						}
+						printfields[nprintfields].scale = scalevalue;
+
+						if (strcmp(printfields[nprintfields].name, "calcPotentialTemperature") == 0)
+							calc_potentialtemp = true;
+						if (strcmp(printfields[nprintfields].name, "calcSoundspeed") == 0)
+							calc_soundspeed = true;
+						if (strcmp(printfields[nprintfields].name, "calcDensity") == 0)
+							calc_density = true;
+						if (strcmp(printfields[nprintfields].name, "calcKTime") == 0)
+							calc_ktime = true;
+						if (strcmp(printfields[nprintfields].name, "calcKSpeed") == 0)
+							calc_kspeed = true;
+						if (strcmp(printfields[nprintfields].name, "calcPSpeed") == 0)
+							calc_pspeed = true;
+		        		if (strcmp(printfields[nprintfields].name, "timeInterval") == 0)
+		          			calculate_time_interval = true;
+						printfields[nprintfields].index = -1;
+						nprintfields++;
+					}
+				}
+				else if (strcmp("output-mode", options[option_index].name) == 0) {
+					int tmp;
+					sscanf(optarg, "%d", &tmp);
+					output_mode = (output_t)tmp;  // TODO(schwehr): Range check
+				}
+				else if (strcmp("print-format", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", printformat);
+				}
+				else if (strcmp("print-header", options[option_index].name) == 0) {
+					printheader = true;
+				}
+				else if (strcmp("recalculate-ctd", options[option_index].name) == 0) {
+					recalculate_ctd = true;
+					sscanf(optarg, "%d", &ctd_calibration_id);
+				}
+				else if (strcmp("scale", options[option_index].name) == 0) {
+					double tmpd;
+					if (int nscan = sscanf(optarg, "%lf", &tmpd) == 1)
+						scalevalue = tmpd;
+				}
+				break;
 			case 'H':
 			case 'h':
 				help = true;
@@ -366,7 +487,7 @@ int main(int argc, char **argv) {
 			case 'X':
 			case 'x':
 				double tmpd;
-				if (int nscan = sscanf(optarg, "%lf", &tmpd) == 1) 
+				if (int nscan = sscanf(optarg, "%lf", &tmpd) == 1)
 					scalevalue = tmpd;
 				break;
 			case '?':

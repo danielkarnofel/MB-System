@@ -152,13 +152,40 @@ constexpr char help_message[] =
     "covered by multibeam swaths and then fills in gaps between\n"
     "the swaths (to the degree specified by the user) using a minimum\n"
     "curvature algorithm.";
-constexpr char usage_message[] =
+constexpr char usage_message_old[] =
     "mbmosaic -Ifilelist -Oroot\n"
     "    [-Rwest/east/south/north -Rfactor -Adatatype\n"
     "    -Bborder -Cclip/mode/tension -Dxdim/ydim -Edx/dy/units\n"
     "    -Fpriority_range -Ggridkind -H -Jprojection -Llonflip -M -N -Ppings\n"
     "    -Sspeed -Ttopogrid -Ubearing/factor[/mode] -V -Wscale -Xextend\n"
     "    -Ypriority_source -Zbathdef]";
+constexpr char usage_message[] =
+    "mbmosaic\n"
+    "\t--altitude-default=bathdef {-Zbathdef}\n"
+    "\t--border=border {-Bborder}\n"
+    "\t--bounds=west/east/south/north {-Rwest/east/south/north}\n"
+    "\t--bounds=factor {-Rfactor}\n"
+    "\t--data-type=datatype {-Adatatype}\n"
+    "\t--directional-priority=bearing/factor[/mode] {-Ubearing/factor[/mode]}\n"
+    "\t--extend=extend {-Xextend}\n"
+    "\t--extra-grids {-M}\n"
+    "\t--grid-dimensions=xdim/ydim {-Dxdim/ydim}\n"
+    "\t--grid-format=gridkind {-Ggridkind}\n"
+    "\t--grid-spacing=dx/dy/units {-Edx/dy/units}\n"
+    "\t--help {-H}\n"
+    "\t--input=filelist {-Ifilelist}\n"
+    "\t--longitude-domain=lonflip {-Llonflip}\n"
+    "\t--output=root {-Oroot}\n"
+    "\t--pings=pings {-Ppings}\n"
+    "\t--priority-range=priority_range[/weight] {-Fpriority_range[/weight]}\n"
+    "\t--priority-source=priority_source {-Ypriority_source}\n"
+    "\t--projection=projection {-Jprojection}\n"
+    "\t--speed-minimum=speed {-Sspeed}\n"
+    "\t--spline-interpolation=clip/mode/tension {-Cclip/mode/tension}\n"
+    "\t--topography-grid=topogridfile {-Ttopogridfile}\n"
+    "\t--use-nan {-N}\n"
+    "\t--verbose {-V}\n"
+    "\t--weighting-scale=scale {-Wscale}\n\n";
 
 /*--------------------------------------------------------------------*/
 /*
@@ -1093,13 +1120,265 @@ int main(int argc, char **argv) {
 	FILE *outfp = nullptr;
 
 	{
+		static struct option options[] = {{"verbose", no_argument, nullptr, 0},
+		                                  {"help", no_argument, nullptr, 0},
+		                                  {"altitude-default", required_argument, nullptr, 0},
+		                                  {"border", required_argument, nullptr, 0},
+		                                  {"bounds", required_argument, nullptr, 0},
+		                                  {"data-type", required_argument, nullptr, 0},
+		                                  {"directional-priority", required_argument, nullptr, 0},
+		                                  {"extend", required_argument, nullptr, 0},
+		                                  {"extra-grids", no_argument, nullptr, 0},
+		                                  {"grid-dimensions", required_argument, nullptr, 0},
+		                                  {"grid-format", required_argument, nullptr, 0},
+		                                  {"grid-spacing", required_argument, nullptr, 0},
+		                                  {"input", required_argument, nullptr, 0},
+		                                  {"longitude-domain", required_argument, nullptr, 0},
+		                                  {"output", required_argument, nullptr, 0},
+		                                  {"pings", required_argument, nullptr, 0},
+		                                  {"priority-range", required_argument, nullptr, 0},
+		                                  {"priority-source", required_argument, nullptr, 0},
+		                                  {"projection", required_argument, nullptr, 0},
+		                                  {"speed-minimum", required_argument, nullptr, 0},
+		                                  {"spline-interpolation", required_argument, nullptr, 0},
+		                                  {"topography-grid", required_argument, nullptr, 0},
+		                                  {"use-nan", no_argument, nullptr, 0},
+		                                  {"weighting-scale", required_argument, nullptr, 0},
+		                                  {nullptr, 0, nullptr, 0}};
+
 		bool errflg = false;
 		bool help = false;
 		int c;
-		while ((c = getopt(argc, argv, "A:a:B:b:C:c:D:d:E:e:F:f:G:g:HhI:i:J:j:L:l:MmNnO:o:P:p:R:r:S:s:T:t:U:u:VvW:w:X:x:Y:y:Z:z:")) !=
+		int option_index;
+		while ((c = getopt_long(argc, argv, "A:a:B:b:C:c:D:d:E:e:F:f:G:g:HhI:i:J:j:L:l:MmNnO:o:P:p:R:r:S:s:T:t:U:u:VvW:w:X:x:Y:y:Z:z:", options, &option_index)) !=
 		       -1)
 		{
 			switch (c) {
+			case 0:
+				if (strcmp("verbose", options[option_index].name) == 0) {
+					verbose++;
+				}
+				else if (strcmp("help", options[option_index].name) == 0) {
+					help = true;
+				}
+				else if (strcmp("data-type", options[option_index].name) == 0) {
+					int tmp;
+					sscanf(optarg, "%d", &tmp);
+					datatype = (datatype_t)tmp;
+					if (optarg[1] == 'f' || optarg[1] == 'F')
+						usefiltered = true;
+				}
+				else if (strcmp("border", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf", &border);
+				}
+				else if (strcmp("spline-interpolation", options[option_index].name) == 0) {
+					const int n = sscanf(optarg, "%d/%d/%lf", &clip, &clipmode, &tension);
+					if (n < 1)
+						clipmode = MBMOSAIC_INTERP_NONE;
+					else if (n == 1 && clip > 0)
+						clipmode = MBMOSAIC_INTERP_GAP;
+					else if (n == 1)
+						clipmode = MBMOSAIC_INTERP_NONE;
+					else if (clip > 0 && clipmode < 0)
+						clipmode = MBMOSAIC_INTERP_GAP;
+					else if (clipmode >= 3)
+						clipmode = MBMOSAIC_INTERP_ALL;
+					if (n < 3) {
+						tension = 0.0;
+					}
+				}
+				else if (strcmp("grid-dimensions", options[option_index].name) == 0) {
+					const int n = sscanf(optarg, "%d/%d", &xdim, &ydim);
+					if (n == 2)
+						set_dimensions = true;
+				}
+				else if (strcmp("grid-spacing", options[option_index].name) == 0) {
+					if (optarg[strlen(optarg) - 1] == '!') {
+						spacing_priority = true;
+						optarg[strlen(optarg) - 1] = '\0';
+					}
+					const int n = sscanf(optarg, "%lf/%lf/%1023s", &dx_set, &dy_set, units);
+					if (n > 1)
+						set_spacing = true;
+					if (n < 3)
+						strcpy(units, "meters");
+				}
+				else if (strcmp("priority-range", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf/%d", &priority_range, &weight_priorities);
+					grid_mode = MBMOSAIC_AVERAGE;
+				}
+				else if (strcmp("grid-format", options[option_index].name) == 0) {
+					if (optarg[0] == '=') {
+						gridkind = MBMOSAIC_GMTGRD;
+						snprintf(gridkindstring, sizeof(gridkindstring), "%s", optarg);
+					}
+					else {
+						int tmp;
+						int nscan = sscanf(optarg, "%d", &tmp);
+						// Range check
+						if (nscan == 1 && tmp >= 1 && tmp <= 4) {
+							gridkind = (grid_type_t)tmp;
+							if (gridkind == MBMOSAIC_CDFGRD) {
+								gridkind = MBMOSAIC_GMTGRD;
+								gridkindstring[0] = '\0';
+							}
+						} else if (optarg[0] == 'n' || optarg[0] == 'c' || optarg[0] == 'b'
+						          || optarg[0] == 'r' || optarg[0] == 's' || optarg[0] == 'a'
+						          || optarg[0] == 'e' || optarg[0] == 'g'){
+							snprintf(gridkindstring, sizeof(gridkindstring), "=%s", optarg);
+							gridkind = MBMOSAIC_GMTGRD;
+						} else {
+							fprintf(stdout, "Invalid gridkind option: -G%s\n\n", optarg);
+							errflg = true;
+						}
+					}
+				}
+				else if (strcmp("input", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", filelist);
+				}
+				else if (strcmp("projection", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", projection_pars);
+					projection_pars_f = true;
+				}
+				else if (strcmp("longitude-domain", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &lonflip);
+				}
+				else if (strcmp("extra-grids", options[option_index].name) == 0) {
+					more = true;
+				}
+				else if (strcmp("use-nan", options[option_index].name) == 0) {
+					use_NaN = true;
+				}
+				else if (strcmp("output", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", fileroot);
+				}
+				else if (strcmp("pings", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &pings);
+				}
+				else if (strcmp("bounds", options[option_index].name) == 0) {
+					if (strchr(optarg, '/') == nullptr) {
+						sscanf(optarg, "%lf", &boundsfactor);
+						if (boundsfactor <= 1.0)
+							boundsfactor = 0.0;
+					}
+					else {
+						mb_get_bounds(optarg, gbnd);
+						gbndset = true;
+					}
+				}
+				else if (strcmp("speed-minimum", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf", &speedmin);
+				}
+				else if (strcmp("topography-grid", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", topogridfile);
+					usetopogrid = true;
+				}
+				else if (strcmp("directional-priority", options[option_index].name) == 0) {
+					double t1;  // bearing
+					double t2;  // factor
+					const int n = sscanf(optarg, "%lf/%lf/%d", &t1, &t2, &k_mode);
+					if (n == 3 && k_mode == 1) {
+						priority_heading = t1;
+						priority_heading_factor = t2;
+						if ((priority_mode & MBMOSAIC_PRIORITY_HEADING) == 0) {
+							priority_mode = static_cast<priority_t>(
+								static_cast<int>(priority_mode) +
+								static_cast<int>(MBMOSAIC_PRIORITY_HEADING));
+
+						}
+					}
+					else if (n >= 2) {
+						priority_azimuth = t1;
+						priority_azimuth_factor = t2;
+						if ((priority_mode & MBMOSAIC_PRIORITY_AZIMUTH) == 0) {
+							priority_mode = static_cast<priority_t>(
+								static_cast<int>(priority_mode) +
+								static_cast<int>(MBMOSAIC_PRIORITY_AZIMUTH));
+						}
+					}
+					else if (n >= 1) {
+						priority_azimuth = t1;
+						priority_azimuth_factor = 1.0;
+						if ((priority_mode & MBMOSAIC_PRIORITY_AZIMUTH) == 0) {
+							priority_mode = static_cast<priority_t>(
+								static_cast<int>(priority_mode) +
+								static_cast<int>(MBMOSAIC_PRIORITY_AZIMUTH));
+						}
+					}
+				}
+				else if (strcmp("weighting-scale", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf", &scale);
+				}
+				else if (strcmp("extend", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf", &extend);
+				}
+				else if (strcmp("priority-source", options[option_index].name) == 0) {
+					int tmp = MBMOSAIC_PRIORITYTABLE_FILE;
+					int n = sscanf(optarg, "%d", &tmp);
+					if (n == 1) {
+						if (tmp > MBMOSAIC_PRIORITYTABLE_FILE && tmp <= MBMOSAIC_PRIORITYTABLE_85DEGREESDN)
+							priority_source = (priority_table_t)tmp;
+						else {
+							fprintf(outfp, "\nInvalid argument to -Ypriority_source option: %s\n", optarg);
+							errflg = true;
+						}
+					}
+					if (priority_source == MBMOSAIC_PRIORITYTABLE_FILE) {
+						sscanf(optarg, "%1023s", pfile);
+					}
+					else if (priority_source == MBMOSAIC_PRIORITYTABLE_60DEGREESUP) {
+						n_priority_angle = n_priority_angle_60degreesup;
+						priority_angle_angle = priority_angle_60degreesup_angle;
+						priority_angle_priority = priority_angle_60degreesup_priority;
+					}
+					else if (priority_source == MBMOSAIC_PRIORITYTABLE_67DEGREESUP) {
+						n_priority_angle = n_priority_angle_67degreesup;
+						priority_angle_angle = priority_angle_67degreesup_angle;
+						priority_angle_priority = priority_angle_67degreesup_priority;
+					}
+					else if (priority_source == MBMOSAIC_PRIORITYTABLE_75DEGREESUP) {
+						n_priority_angle = n_priority_angle_75degreesup;
+						priority_angle_angle = priority_angle_75degreesup_angle;
+						priority_angle_priority = priority_angle_75degreesup_priority;
+					}
+					else if (priority_source == MBMOSAIC_PRIORITYTABLE_85DEGREESUP) {
+						n_priority_angle = n_priority_angle_85degreesup;
+						priority_angle_angle = priority_angle_85degreesup_angle;
+						priority_angle_priority = priority_angle_85degreesup_priority;
+					}
+					else if (priority_source == MBMOSAIC_PRIORITYTABLE_60DEGREESDN) {
+						n_priority_angle = n_priority_angle_60degreesdn;
+						priority_angle_angle = priority_angle_60degreesdn_angle;
+						priority_angle_priority = priority_angle_60degreesdn_priority;
+					}
+					else if (priority_source == MBMOSAIC_PRIORITYTABLE_67DEGREESDN) {
+						n_priority_angle = n_priority_angle_67degreesdn;
+						priority_angle_angle = priority_angle_67degreesdn_angle;
+						priority_angle_priority = priority_angle_67degreesdn_priority;
+					}
+					else if (priority_source == MBMOSAIC_PRIORITYTABLE_75DEGREESDN) {
+						n_priority_angle = n_priority_angle_75degreesdn;
+						priority_angle_angle = priority_angle_75degreesdn_angle;
+						priority_angle_priority = priority_angle_75degreesdn_priority;
+					}
+					else if (priority_source == MBMOSAIC_PRIORITYTABLE_85DEGREESDN) {
+						n_priority_angle = n_priority_angle_85degreesdn;
+						priority_angle_angle = priority_angle_85degreesdn_angle;
+						priority_angle_priority = priority_angle_85degreesdn_priority;
+					}
+					if ((priority_mode & MBMOSAIC_PRIORITY_ANGLE) == 0) {
+						priority_mode = static_cast<priority_t>(
+							static_cast<int>(priority_mode) +
+							static_cast<int>(MBMOSAIC_PRIORITY_ANGLE));
+					}
+				}
+				else if (strcmp("altitude-default", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf", &altitude_default);
+				}
+
+				break;
+
+			/* short options (deprecated) */
 			case 'A':
 			case 'a':
 			{

@@ -70,8 +70,18 @@ constexpr char help_message[] =
     "arguments will be changed; if no ~/.mbio_defaults\n"
     "file exists one will be created.";
 constexpr char usage_message[] =
-    "mbdefaults [-Bfileiobuffer -Dpsdisplay -Ffbtversion -Iimagedisplay -Llonflip\n"
-    "    -Mmbviewsettings\n\t-Ttimegap -Wproject -V -H]";
+    "mbdefaults\n"
+    "\t--fbt-version=fbtversion {-Ffbtversion}\n"
+    "\t--file-io-buffer=fileiobuffer {-Bfileiobuffer}\n"
+    "\t--help {-H}\n"
+    "\t--image-display=imagedisplay {-Iimagedisplay}\n"
+    "\t--lonflip=lonflip {-Llonflip}\n"
+    "\t--mbview-settings=mbviewsettings {-Mmbviewsettings}\n"
+    "\t--project=mbproject {-Wmbproject}\n"
+    "\t--ps-display=psdisplay {-Dpsdisplay}\n"
+    "\t--time-gap=timegap {-Ttimegap}\n"
+    "\t--use-lock-files=yes|no {-Uyes|no}\n"
+    "\t--verbose {-V}\n\n";
 
 /*--------------------------------------------------------------------*/
 
@@ -126,12 +136,110 @@ int main(int argc, char **argv) {
 	bool flag = false;
 
 	{
+		static struct option options[] = {
+			{"file-io-buffer", required_argument, nullptr, 0},
+			{"ps-display", required_argument, nullptr, 0},
+			{"fbt-version", required_argument, nullptr, 0},
+			{"help", no_argument, nullptr, 0},
+			{"image-display", required_argument, nullptr, 0},
+			{"lonflip", required_argument, nullptr, 0},
+			{"mbview-settings", required_argument, nullptr, 0},
+			{"time-gap", required_argument, nullptr, 0},
+			{"use-lock-files", required_argument, nullptr, 0},
+			{"verbose", no_argument, nullptr, 0},
+			{"project", required_argument, nullptr, 0},
+			{nullptr, 0, nullptr, 0}
+		};
+
 		bool errflg = false;
 		bool help = false;
 		int c;
-		while ((c = getopt(argc, argv, "B:b:D:d:F:f:HhI:i:L:l:M:m:T:t:U:u:VvW:w:")) != -1)
+		int option_index;
+		while ((c = getopt_long(argc, argv, "B:b:D:d:F:f:HhI:i:L:l:M:m:T:t:U:u:VvW:w:", options, &option_index)) != -1)
 		{
 			switch (c) {
+			case 0:
+				if (strcmp("file-io-buffer", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &fileiobuffer);
+					flag = true;
+				}
+				else if (strcmp("ps-display", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", psdisplay);
+					flag = true;
+				}
+				else if (strcmp("fbt-version", options[option_index].name) == 0) {
+					char argstring[MB_PATH_MAXLINE];
+					sscanf(optarg, "%1023s", argstring);
+					if (strncmp(argstring, "new", 3) == 0 || strncmp(argstring, "NEW", 3) == 0)
+						fbtversion = 3;
+					else if (strncmp(argstring, "old", 2) == 0 || strncmp(argstring, "OLD", 2) == 0)
+						fbtversion = 2;
+					else if (strncmp(argstring, "2", 1) == 0)
+						fbtversion = 2;
+					else if (strncmp(argstring, "3", 1) == 0)
+						fbtversion = 3;
+					flag = true;
+				}
+				else if (strcmp("help", options[option_index].name) == 0) {
+					help = true;
+				}
+				else if (strcmp("image-display", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", imgdisplay);
+					flag = true;
+				}
+				else if (strcmp("lonflip", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &lonflip);
+					flag = true;
+				}
+				else if (strcmp("mbview-settings", options[option_index].name) == 0) {
+					/* default primary colortable and modes */
+					if (optarg[0] == 'P' || optarg[0] == 'p') {
+						int tmp;
+						/* n = */ sscanf(&optarg[1], "%d/%d/%d", &primary_colortable, &tmp, &primary_shade_mode);
+						primary_colortable_mode = (colortable_mode_t)tmp;
+					} else if (optarg[0] == 'G' || optarg[0] == 'g') {
+						/* default slope colortable and mode */
+						/* n = */ sscanf(&optarg[1], "%d/%d", &slope_colortable, &slope_colortable_mode);
+					} else if (optarg[0] == 'O' || optarg[0] == 'o') {
+						/* default overlay colortable and mode */
+						int tmp;
+						/* n = */ sscanf(&optarg[1], "%d/%d", &secondary_colortable, &tmp);
+						secondary_colortable_mode = (colortable_mode_t)tmp;
+					} else if (optarg[0] == 'I' || optarg[0] == 'i') {
+						/* default illumination parameters */
+						/* n = */ sscanf(&optarg[1], "%lf/%lf/%lf", &illuminate_magnitude, &illuminate_elevation, &illuminate_azimuth);
+					} else if (optarg[0] == 'S' || optarg[0] == 'S') {
+						/* default slope shading magnitude */
+						/* n = */ sscanf(&optarg[1], "%lf", &slope_magnitude);
+					}
+
+					flag = true;
+				}
+				else if (strcmp("time-gap", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf", &timegap);
+					flag = true;
+				}
+				else if (strcmp("use-lock-files", options[option_index].name) == 0) {
+					char argstring[MB_PATH_MAXLINE];
+					sscanf(optarg, "%1023s", argstring);
+					if (strncmp(argstring, "yes", 3) == 0 || strncmp(argstring, "YES", 3) == 0)
+						uselockfiles = true;
+					else if (strncmp(argstring, "no", 2) == 0 || strncmp(argstring, "NO", 2) == 0)
+						uselockfiles = false;
+					else if (strncmp(argstring, "1", 1) == 0)
+						uselockfiles = true;
+					else if (strncmp(argstring, "0", 1) == 0)
+						uselockfiles = false;
+					flag = true;
+				}
+				else if (strcmp("verbose", options[option_index].name) == 0) {
+					verbose++;
+				}
+				else if (strcmp("project", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", mbproject);
+					flag = true;
+				}
+				break;
 			case 'B':
 			case 'b':
 				sscanf(optarg, "%d", &fileiobuffer);

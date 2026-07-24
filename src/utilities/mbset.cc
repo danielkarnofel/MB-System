@@ -68,7 +68,17 @@ constexpr char help_message[] =
     "The parameters controlling mbprocess are included in an ascii\n"
     "parameter file. The parameter file syntax is documented by\n"
     "the manual pages for mbprocess and mbset. \n\n";
-constexpr char usage_message[] = "mbset -Iinfile -PPARAMETER:value [-E -L -N -V -H]";
+constexpr char usage_message_old[] = "mbset -Iinfile -PPARAMETER:value [-E -L -N -V -H]";
+constexpr char usage_message[] =
+    "mbset\n"
+    "\t--explicit {-E}\n"
+    "\t--format=format_id {-Fformat_id}\n"
+    "\t--help {-H}\n"
+    "\t--input=file {-Ifile}\n"
+    "\t--look-for-files {-L}\n"
+    "\t--parameter=PARAMETER:value {-PPARAMETER:value}\n"
+    "\t--remove-nav-adjust {-N}\n"
+    "\t--verbose {-V}\n\n";
 
 /*--------------------------------------------------------------------*/
 
@@ -99,11 +109,67 @@ int main(int argc, char **argv) {
 
 	/* process argument list */
 	{
+		static struct option options[] = {{"explicit", no_argument, nullptr, 0},
+		                                  {"format", required_argument, nullptr, 0},
+		                                  {"help", no_argument, nullptr, 0},
+		                                  {"input", required_argument, nullptr, 0},
+		                                  {"look-for-files", no_argument, nullptr, 0},
+		                                  {"parameter", required_argument, nullptr, 0},
+		                                  {"remove-nav-adjust", no_argument, nullptr, 0},
+		                                  {"verbose", no_argument, nullptr, 0},
+		                                  {nullptr, 0, nullptr, 0}};
+
 		bool errflg = false;
 		int c;
+		int option_index;
 		bool help = false;
-		while ((c = getopt(argc, argv, "VvHhEeF:f:I:i:LlNnP:p:")) != -1)
+		while ((c = getopt_long(argc, argv, "VvHhEeF:f:I:i:LlNnP:p:", options, &option_index)) != -1)
 			switch (c) {
+			/* long options all return c=0 */
+			case 0:
+				if (strcmp("help", options[option_index].name) == 0) {
+					help = true;
+				}
+				else if (strcmp("verbose", options[option_index].name) == 0) {
+					verbose++;
+				}
+				else if (strcmp("explicit", options[option_index].name) == 0) {
+					is_explicit = true;
+				}
+				else if (strcmp("format", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &format);
+				}
+				else if (strcmp("input", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", read_file);
+				}
+				else if (strcmp("look-for-files", options[option_index].name) == 0) {
+					lookforfiles = true;
+				}
+				else if (strcmp("remove-nav-adjust", options[option_index].name) == 0) {
+					removembnavadjust = true;
+				}
+				else if (strcmp("parameter", options[option_index].name) == 0) {
+					if (strlen(optarg) > 1) {
+						/* Replace first '=' before ':' with ':'  */
+						for (int i = 0; i < strlen(optarg); i++) {
+							if (optarg[i] == ':') {
+								break;
+							}
+							else if (optarg[i] == '=') {
+								optarg[i] = ':';
+								break;
+							}
+						}
+
+						/* store the parameter argument */
+						pargv = (char **)realloc(pargv, (pargc + 1) * sizeof(char *));
+						pargv[pargc] = (char *)malloc(strlen(optarg) + 1);
+						strcpy(pargv[pargc], optarg);
+						pargc++;
+					}
+				}
+				break;
+
 			case 'H':
 			case 'h':
 				help = true;

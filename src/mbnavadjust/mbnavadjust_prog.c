@@ -777,7 +777,10 @@ int mbnavadjust_file_open(char *projectname) {
     snprintf(path, sizeof(path), "%s/ProjectTopoAdj.grd", project.datadir);
     struct stat file_status;
     if (stat(path, &file_status) != 0) {
+      snprintf(message, sizeof(message), "Updating bathymetry grids...");
+      do_message_on(message);
       status = mbnavadjust_updategrid(mbna_verbose, &project);
+      do_message_off();
     }
   }
 

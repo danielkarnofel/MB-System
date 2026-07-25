@@ -324,6 +324,30 @@ mbnavadjustmerge's --apply-navigation, run against a project created with
 --create-project, would silently skip updating each file's processing parameters with no
 error reported.
 
+Program mbnavadjust: Fixed a regression from moving the navigation-inversion, grid-update,
+and apply-navigation logic into the shared mbnavadjust_core library (see above): the
+"please wait" message dialog no longer appeared during Invert Navigation or Update Grids,
+since those functions could no longer call GUI dialog functions directly. Restored the
+dialog by wrapping the calls at each of their GUI call sites (the Invert Navigation and
+Update Grids menu items, the automatic grid update after importing data, and the automatic
+grid update when opening a project whose topography grid does not yet exist) with the same
+do_message_on()/do_message_off() pattern already used elsewhere in the program, and did the
+same for Apply Adjusted Navigation, which had the identical gap. A follow-up fix addressed
+a second bug uncovered in the process: do_message_on() itself did not wait for the dialog to
+actually become mapped and viewable before returning, so on a dialog's first appearance in a
+session, the window manager's mapping could still be pending when the long operation
+immediately following it started; since none of these operations return control to the
+window system's event loop until they finish, the dialog's initial text could remain
+unpainted (an empty box) for the operation's entire duration. Fixed by having do_message_on()
+wait for the dialog to become viewable first, mirroring the equivalent wait already used for
+the main window at startup.
+
+Program mbnavadjust (and mbnavadjustmerge): During autopicking, a crossing whose section
+length is less than 0.25 times the project's desired section length is silently skipped (to
+avoid matching short sections at the end of a file); this is now reported to the user with a
+message stating the crossing was skipped due to short section length, whether autopick is
+run interactively or via mbnavadjustmerge.
+
 Programs mbedit, mbnavedit, and mbvelocitytool: A memory-management and correctness audit
 of these three interactive Motif editors (paralleling the earlier audits of src/utilities
 and mbview/mbeditviz) found and fixed a critical NULL-pointer-write crash in mbnavedit's

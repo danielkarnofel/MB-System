@@ -1535,6 +1535,11 @@ int mbnavadjust_autopick(int verbose, struct mbna_project *project_ptr, int cros
         if (section1->distance < 0.25 * project.section_length
             || section2->distance < 0.25 * project.section_length) {
           process = false;
+          fprintf(stderr,
+                  "Crossing %d skipped: section %d:%d or %d:%d shorter than 0.25 of the "
+                  "project section length (%.3f km): %.3f km, %.3f km\n",
+                  i, crossing->file_id_1, crossing->section_1, crossing->file_id_2, crossing->section_2,
+                  project.section_length, section1->distance, section2->distance);
         }
       }
 

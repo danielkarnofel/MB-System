@@ -5046,7 +5046,10 @@ void do_fileselection_ok(Widget w, XtPointer client_data, XtPointer call_data) {
 
     /* update datalist files and topography grids */
     mbna_status = MBNA_STATUS_NAVSOLVE;
+    snprintf(message, sizeof(message), "Updating bathymetry grids...");
+    do_message_on(message);
     mbnavadjust_updategrid(mbna_verbose, &project);
+    do_message_off();
     mbna_status = MBNA_STATUS_GUI;
     do_update_status();
     if (project.modelplot) {
@@ -5946,9 +5949,13 @@ void do_action_invertnav(Widget w, XtPointer client_data, XtPointer call_data) {
   (void)call_data; // Unused parameter
 
   // XmAnyCallbackStruct *acs = (XmAnyCallbackStruct *)call_data;
+  mb_pathplus message;
 
   mbna_status = MBNA_STATUS_NAVSOLVE;
+  snprintf(message, sizeof(message), "Inverting for navigation adjustment model...");
+  do_message_on(message);
   mbnavadjust_invertnav(mbna_verbose, &project);
+  do_message_off();
   mbna_status = MBNA_STATUS_GUI;
   do_update_status();
   if (project.modelplot) {
@@ -5969,9 +5976,13 @@ void do_action_updategrids(Widget w, XtPointer client_data, XtPointer call_data)
   (void)call_data; // Unused parameter
 
   // XmAnyCallbackStruct *acs = (XmAnyCallbackStruct *)call_data;
+  mb_pathplus message;
 
   mbna_status = MBNA_STATUS_NAVSOLVE;
+  snprintf(message, sizeof(message), "Updating bathymetry grids...");
+  do_message_on(message);
   mbnavadjust_updategrid(mbna_verbose, &project);
+  do_message_off();
   mbna_status = MBNA_STATUS_GUI;
   do_update_status();
 //  if (project.modelplot) {
@@ -5992,7 +6003,11 @@ void do_apply_nav(Widget w, XtPointer client_data, XtPointer call_data) {
   (void)call_data; // Unused parameter
 
   // XmAnyCallbackStruct *acs = (XmAnyCallbackStruct *)call_data;
+  mb_pathplus message;
+  snprintf(message, sizeof(message), "Applying adjusted navigation...");
+  do_message_on(message);
   mbnavadjust_applynav(mbna_verbose, &project);
+  do_message_off();
   do_update_status();
 }
 
@@ -6775,6 +6790,28 @@ int do_message_on(char *message) {
 
   set_label_string(label_message, message);
   XtManageChild(bulletinBoard_message);
+
+  /* Wait for the message dialog to actually become mapped and viewable
+      before returning, mirroring the wait loop already used for the main
+      window at startup in do_wait_until_viewed(). XSync()/XmUpdateDisplay()
+      alone do not guarantee this the first time the dialog is shown in a
+      session: the window manager's own mapping sequence can lag behind the
+      XtManageChild() request above, and every caller of this function
+      starts a long blocking operation immediately afterward - without this
+      wait, the dialog's initial paint could remain undispatched (showing
+      an empty box with no text) for the entire duration of that
+      operation. */
+  Widget shell = XtParent(bulletinBoard_message);
+  if (XtIsRealized(shell)) {
+    Window shellwindow = XtWindow(shell);
+    XWindowAttributes xwa;
+    XEvent event;
+    while (XGetWindowAttributes(XtDisplay(shell), shellwindow, &xwa) && xwa.map_state != IsViewable) {
+      XtAppNextEvent(app_context, &event);
+      XtDispatchEvent(&event);
+    }
+  }
+
   XSync(XtDisplay(bulletinBoard_message), 0);
   XmUpdateDisplay(bulletinBoard_message);
 

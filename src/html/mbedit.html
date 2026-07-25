@@ -11,7 +11,7 @@
 <CENTER><H3><U>MB-System Unix Manual Page</U></H3></CENTER>
 <PRE>
 <H1>mbedit</H1>
-Section:  MB-System 5.0  (1)<BR>Updated:  24 November 2018 <BR><A HREF="#index">Index</A>
+Section:  MB-System 5.0  (1)<BR>Updated:  24 July 2026 <BR><A HREF="#index">Index</A>
 <HR>
 
 <A NAME="lbAB">&nbsp;</A>
@@ -27,9 +27,43 @@ Version 5.0
 <A NAME="lbAD">&nbsp;</A>
 <H2>SYNOPSIS</H2>
 
-<B>mbedit</B> [<B>-B</B><I>yr/mo/da/hr/mn/sc</I>
-<B>-D</B> <B>-E</B><I>yr/mo/da/hr/mn/sc</I>
-<B>-F</B><I>format</I> <B> -G -I</B><I>infile</I> <B>-X -V -H</B>]
+<B>mbedit</B>
+<BR>
+
+[
+<BR>
+
+<B>--begin-time</B>=<I>yr/mo/da/hr/mn/sc</I> {<B>-B</B><I>yr/mo/da/hr/mn/sc</I>}
+<BR>
+
+<B>--browse</B> {<B>-D</B>}
+<BR>
+
+<B>--end-time</B>=<I>yr/mo/da/hr/mn/sc</I> {<B>-E</B><I>yr/mo/da/hr/mn/sc</I>}
+<BR>
+
+<B>--format</B>=<I>format_id</I> {<B>-F</B><I>format_id</I>}
+<BR>
+
+<B>--gui-mode</B> {<B>-G</B>}
+<BR>
+
+<B>--help</B> {<B>-H</B>}
+<BR>
+
+<B>--input</B>=<I>file</I> {<B>-I</B><I>file</I>}
+<BR>
+
+<B>--run-mbprocess</B> {<B>-X</B>}
+<BR>
+
+<B>--use-edit-save</B> {<B>-S</B>}
+<BR>
+
+<B>--verbose</B> {<B>-V</B>}
+<BR>
+
+]
 <P>
 <A NAME="lbAE">&nbsp;</A>
 <H2>DESCRIPTION</H2>
@@ -110,19 +144,19 @@ to the editing process.
 <P>
 <B>MBedit</B> has some limited automatic flagging and unflagging
 options. The <B>Unflag View</B> button allows users to unflag all of
-the currently visible soundings, and the <B>Unflag Forward</B>
+the currently visible soundings, the <B>Flag View</B> button flags all
+of the currently unflagged soundings, and the <B>Unflag Forward</B>
 button unflags all soundings from the current position forward
 to the end of the data held in memory. The <B>Controls</B> menu
 includes a <B>Filters...</B> button that brings up a dialog
 which sets the automatic flagging functions. At present, these
 include a median filter algorithm, a &quot;wrong side filter&quot;, &quot;data
-cutting&quot; by beam number, and &quot;data cutting&quot; by acrosstrack
-distance. The &quot;wrong side&quot; filter flags soundings positioned on
+cutting&quot; by beam number, &quot;data cutting&quot; by acrosstrack
+distance, and &quot;data cutting&quot; by beam angle. The &quot;wrong side&quot; filter flags soundings positioned on
 the &quot;wrong&quot; side of the swath (port soundings incorrectly located
-on the starboard side, or vice versa). The two &quot;data cutting&quot;
+on the starboard side, or vice versa). The three &quot;data cutting&quot;
 algorithms flag beams inside or outside of specified beam number
-ranges or acrosstrack distance ranges, respectively.  Additional
-automatic filters will be added in later versions.
+ranges, acrosstrack distance ranges, or beam angle ranges, respectively.
 <P>
 If the ping includes flagged depths outside the plotting box, the ping label
 is underlain by a green box. If
@@ -147,7 +181,7 @@ and <B>Reverse</B> buttons provide a duplicate stepping capability.
 Left-handed users may reverse the right and left mouse button functions by pulling down
 the <B>Reverse Mouse Buttons</B> menu item from the <B>Controls</B> button.
 <P>
-<B>MBedit</B> can hold up to 25000 swath bathymetry
+<B>MBedit</B> can hold up to 30000 swath bathymetry
 profiles at a time in memory. In the case that
 a data file contains more survey data records than can be held in memory,
 users will find it necessary to step through multiple buffers of
@@ -229,35 +263,32 @@ Christian do Santos Ferreira
 <H2>OPTIONS</H2>
 
 <DL COMPACT>
-<DT><B>-B</B>
+<DT><B>--begin-time=</B><I>yr/mo/da/hr/mn/sc</I> {<B>-B</B><I>yr/mo/da/hr/mn/sc</I>}
 
 <DD>
-<I>yr/mo/da/hr/mn/sc</I>
 <BR>
 
 Sets the starting time for data allowed in the input data; pings
 with times before the starting time will be ignored.
 Default: <I>yr/mo/da/hr/mn/sc</I> = 1962/2/21/10/30/0.
-<DT><B>-D</B>
+<DT><B>--browse {-D</B>}
 
 <DD>
 Starts up the program in &quot;browse&quot; mode. If a file is opened
 in browse mode (either at startup or later), none
 of the edited data will be output to a file. The default
 is to output the edited data to a file.
-<DT><B>-E</B>
+<DT><B>--end-time=</B><I>yr/mo/da/hr/mn/sc</I> {<B>-E</B><I>yr/mo/da/hr/mn/sc</I>}
 
 <DD>
-<I>yr/mo/da/hr/mn/sc</I>
 <BR>
 
 Sets the ending time for data allowed in the input data; pings
 with times after the ending time will be ignored.
 Default: <I>yr/mo/da/hr/mn/sc</I> = 2062/2/21/10/30/0.
-<DT><B>-F</B>
+<DT><B>--format=</B><I>format_id</I> {<B>-F</B><I>format_id</I>}
 
 <DD>
-<I>format</I>
 <BR>
 
 Sets the format at startup for the input and output swath sonar data using
@@ -267,49 +298,60 @@ This program uses the <B>MBIO</B> library and will read any swath sonar
 format supported by <B>MBIO</B>. A list of the swath sonar data formats
 currently supported by <B>MBIO</B> and their identifier values
 is given in the <B>MBIO</B> manual page.
-By default the <I>format</I> id value is inferred fusing the <B>MB-System</B>
+By default the <I>format</I> id value is inferred using the <B>MB-System</B>
 convention of an &quot;.mbXX&quot; suffix (the XX corresponds to the <B>MBIO</B> format id).
-<DT><B>-G</B>
+<DT><B>--gui-mode {-G</B>}
 
 <DD>
 This flag causes the program to treat the <B>Done</B> button as
 equivalent to the <B>Quit</B> button. This option is used when
 <B>MBedit</B> is started automatically by some other process and
 only a single file is to edited.
-<DT><B>-H</B>
+<DT><B>--help {-H</B>}
 
 <DD>
 This &quot;help&quot; flag cause the program to print out a description
 of its operation and then exit immediately.
-<DT><B>-I</B>
+<DT><B>--input=</B><I>file</I> {<B>-I</B><I>file</I>}
 
 <DD>
-<I>infile</I>
 <BR>
 
 Sets the data file from which the input data will be read at startup.
 This option is usually used only when <B>MBedit</B> is started
-automatically from some other process. The <B>-F</B> option can
+automatically from some other process. The <B>--format</B> option can
 be used to set the data format id if the filename does not conform to the
 <B>MB-System</B> convention of an &quot;.mbXX&quot; suffix (the XX corresponds to the
-<B>MBIO</B> format id). If the <B>-B</B> option is
+<B>MBIO</B> format id). If the <B>--browse</B> option is
 not used to specify browse mode, then the edit save output file is
 automatically set as <I>infile</I> with &quot;.esf&quot; appended.
-<DT><B>-X</B>
+<DT><B>--run-mbprocess {-X</B>}
 
 <DD>
 This option causes <B>mbprocess</B> to run automatically
 on an input swath data file when the <B>mbedit</B> editing session
-is completed. The <B>-X</B> option effectively means that the
+is completed. This option effectively means that the
 corresponding processed swath data is generated or updated immediately.
 The program <B>mbprocess</B> will not be invoked if the
 editing session is in the browse mode.
-<DT><B>-V</B>
+<DT><B>--use-edit-save {-S</B>}
+
+<DD>
+This option is usually used only when <B>MBedit</B> is started
+automatically from some other process together with the <B>--input</B> option.
+Normally, when a file specified with <B>--input</B> already has an existing
+edit save file, <B>MBedit</B> pops up a dialog box at startup asking the
+user whether to use the previous edits. If this flag is given,
+this dialog is skipped and any existing edit save file for that input
+file is used automatically, exactly as if the user had answered &quot;yes.&quot;
+This option has no effect if no edit save file exists for the input
+file specified with <B>--input</B>.
+<DT><B>--verbose {-V</B>}
 
 <DD>
 Normally, <B>MBedit</B> outputs information to the stderr stream
-regarding the number of records loaded and dumped.  If the
-<B>-V</B> flag is given, then <B>MBedit</B> works in a &quot;verbose&quot; mode and
+regarding the number of records loaded and dumped.  If this
+flag is given, then <B>MBedit</B> works in a &quot;verbose&quot; mode and
 outputs the program version being used, all error status messages,
 and a large amount of other information including all of the
 beams flagged or zeroed.
@@ -351,7 +393,7 @@ If the specified input is a datalist (format
 id = -1), then all of the files referenced through that datalist
 will be added to the internal list, and the first of those files
 loaded. When a file is loaded for editing, <B>MBedit</B> reads
-as much data as will fit into the data buffer (typically 25000 records)
+as much data as will fit into the data buffer (typically 30000 records)
 and several pings are displayed as stacked bathymetry profiles.
 <DT><B>File-&gt;File Selection List</B>
 
@@ -380,9 +422,11 @@ This button accesses a pulldown menu with several toggle buttons:
 <B>Alongtrack View</B>,
 <B>Acrosstrack View</B>,
 <B>Show Flagged Profile</B>,
+<B>Show Flag States</B>,
 <B>Show Bottom Detect Algorithms</B>,
+<B>Show Source Pulse Types</B>,
 <B>Wide Bathymetry Profiles</B>,
-<B>Plot Time Stamps</B>,
+<B>Print Time Stamps</B>,
 <B>Plot Ping Interval</B>,
 <B>Plot Longitude</B>,
 <B>Plot Latitude</B>,
@@ -439,21 +483,36 @@ whether the profile also includes the flagged or &quot;bad&quot; bathymetry
 (toggle set to &quot;On&quot;). In
 the latter case, red line segments show the portion of the profile
 associated with the flagged depth points.
-<DT><B>View-&gt;Show Bottom Detect Algorithms</B>
+<DT><B>View-&gt;Show Flag States, View-&gt;Show Bottom Detect Algorithms, View-&gt;Show Source Pulse Types</B>
 
 <DD>
-This toggle allows the user to specify whether the beams are
-colored according to their flagging status (toggle set to &quot;Off&quot;
-or according to the bottom detect algorithm used by the sonar
-(toggle set to &quot;On&quot;). The default is to color each sounding
-according to its flagging status - unflagged beams are black,
-manually flagged beams are red, and filter flagged beams are
-green. If the beams are colored according to bottom detect
-algorithm, then amplitude detects are shown in black, phase
-detects are shown in red, and beams for which the bottom
-detection algorithm is unknown are shown in green. Users should
-be aware that many swath data formats do not include bottom
-detection algorithm information.
+These three toggles are mutually exclusive - setting any one of them
+turns the other two off - and together control how individual
+soundings are colored in the bathymetry profile plots.
+<BR>
+
+When <B>Show Flag States</B> is on (the default), each sounding is
+colored according to its flagging status: unflagged beams are
+black, manually flagged beams are red, and filter flagged beams
+are green.
+<BR>
+
+When <B>Show Bottom Detect Algorithms</B> is on, each sounding is
+colored according to the bottom detect algorithm used by the sonar:
+amplitude detects are shown in black, phase detects are shown in
+red, and beams for which the bottom detection algorithm is unknown
+(including lidar and photogrammetry detects) are shown in green.
+Users should be aware that many swath data formats do not include
+bottom detection algorithm information.
+<BR>
+
+When <B>Show Source Pulse Types</B> is on, each sounding is colored
+according to the type of sonar pulse used to obtain it: CW pulses
+are shown in black, up-chirp pulses are shown in red, down-chirp
+pulses are shown in blue, and beams for which the pulse type is
+unknown (including lidar pulses) are shown in green. Users should
+be aware that many swath data formats do not include source pulse
+type information.
 <DT><B>View-&gt;Wide Bathymetry Profiles</B>
 
 <DD>
@@ -461,7 +520,7 @@ This toggle, when set, causes <B>mbedit</B> to display the widest
 possible plots of the bathymetry profiles. All of the other options
 discussed immediately below narrow the primary plot in order to
 present additional information on the left side of the window.
-<DT><B>View-&gt;Plot Time Stamps</B>
+<DT><B>View-&gt;Print Time Stamps</B>
 
 <DD>
 This toggle, when set, causes <B>mbedit</B> to display time stamp
@@ -642,16 +701,31 @@ were applied last.
 This toggle button turns automatic median filtering of
 bathymetry profiles on and off.
 When median filtering is enabled, the median depth is
-calculated for each bathymetry ping. Each sounding in the
+calculated over a local window of neighboring pings and beams
+(set by the <B>Median Alongtrack Dimension</B> and
+<B>Median Acrosstrack Dimension</B> sliders discussed below).
+Each sounding in the
 ping is compared with the median value; any sounding that
-differs from the median by a percentage
-greater than a threshold percentage
+differs from the median by more than a threshold percentage
+of the sonar altitude
 is flagged as bad data.
 <DT><B>Controls-&gt;Filters-&gt;% Median Depth Threshold</B>
 
 <DD>
 This slider sets the threshold of the median depth
-filter in units of percentage of the median depth.
+filter in units of percentage of the sonar altitude.
+<DT><B>Controls-&gt;Filters-&gt;Median Alongtrack Dimension</B>
+
+<DD>
+This slider sets the number of pings (centered on the ping
+being filtered) included in the local window used to calculate
+the median depth.
+<DT><B>Controls-&gt;Filters-&gt;Median Acrosstrack Dimension</B>
+
+<DD>
+This slider sets the number of beams (centered on the beam
+being filtered) included in the local window used to calculate
+the median depth.
 <DT><B>Controls-&gt;Filters-&gt;Wrong Side Fllter</B>
 
 <DD>
@@ -722,6 +796,34 @@ by acrosstrack distance starts.
 <DD>
 This slider sets the beam number at which flagging
 by acrosstrack distance ends.
+<DT><B>Controls-&gt;Filters-&gt;Flag by Beam Angle</B>
+
+<DD>
+This toggle button turns automatic beam flagging by
+beam angle (relative to vertical, calculated from the
+acrosstrack distance and sonar altitude) on and off. The flagging is
+controlled by start and end angle values in degrees (set by the two
+sliders discussed immediately below). If the start angle
+is less than or equal to the end angle, then
+all beams with angles between
+the start and end angles are
+flagged, producing a flagged zone within the swath. If
+the start angle is greater than the end angle,
+then all beams with angle less than
+the end angle are flagged,
+and all beams with angle greater than
+the start angle are flagged.
+This produces flagging of both swath edges.
+<DT><B>Controls-&gt;Filters-&gt;Start Flagging Angle</B>
+
+<DD>
+This slider sets the beam angle in degrees at which flagging
+by beam angle starts.
+<DT><B>Controls-&gt;Filters-&gt;End Flagging Angle</B>
+
+<DD>
+This slider sets the beam angle in degrees at which flagging
+by beam angle ends.
 <DT><B>Controls-&gt;Reverse Right/Left Key Macros</B>
 
 <DD>
@@ -801,7 +903,7 @@ obtained by dragging the slider (e.g., the user wants a plot
 width of 10 meters but the slider jumps from 1 to 47), the slider
 can be changed by increments of 1 by clicking with the left button
 inside the slider area, but not on the slider itself.
-<DT><B>Vertical Exageration</B>
+<DT><B>Vertical Exaggeration</B>
 
 <DD>
 This slider sets the depth scale in terms of vertical exaggeration.
@@ -837,9 +939,9 @@ action section):
 <BR>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</TT>Pick:<TT>&nbsp;&nbsp;&nbsp;</TT><TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</TT>'W',&nbsp;'w',&nbsp;'I',&nbsp;'i'<BR>
 <BR>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</TT>Erase:<TT>&nbsp;&nbsp;</TT><TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</TT>'E',&nbsp;'e',&nbsp;'O',&nbsp;'o'<BR>
 <BR>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</TT>Restore:<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</TT>'R',&nbsp;'r',&nbsp;'P',&nbsp;'p'<BR>
-<BR>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</TT>Grab:<TT>&nbsp;&nbsp;&nbsp;</TT><TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</TT>'Y',&nbsp;'y',&nbsp;'},&nbsp;']'<BR>
-<BR>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</TT>Info:<TT>&nbsp;&nbsp;&nbsp;</TT><TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</TT>'T',&nbsp;'t',&nbsp;'{',&nbsp;'['<BR>
-<DT><B>Unflag View</B>
+<BR>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</TT>Grab:<TT>&nbsp;&nbsp;&nbsp;</TT><TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</TT>'T',&nbsp;'t',&nbsp;'{',&nbsp;'['<BR>
+<BR>&nbsp;<TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</TT>Info:<TT>&nbsp;&nbsp;&nbsp;</TT><TT>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</TT>'Y',&nbsp;'y',&nbsp;'},&nbsp;']'<BR>
+<DT><B>Flag View</B>
 
 <DD>
 This button flags all unflagged beams among the currently
@@ -920,18 +1022,18 @@ ping to be flagged as bad.
 <DT><B>'X', 'x', '&lt;', or ','</B>
 
 <DD>
-<B>Right:</B>
+<B>Flag View:</B>
 
 Pressing one of these keys causes all of the unflagged beams
-in the current display to to be flagged as bad. This is equivalent
-to the CFlag View button.
+in the current display to be flagged as bad. This is equivalent
+to the <B>Flag View</B> button.
 <DT><B>'C', 'c', '&gt;', or '.'</B>
 
 <DD>
-<B>Right:</B>
+<B>Unflag View:</B>
 
 Pressing one of these keys causes all of the flagged beams
-in the current display to to be unflagged. This is equivalent
+in the current display to be unflagged. This is equivalent
 to the <B>Unflag View</B> button.
 <DT><B>'S', 's', 'K', or 'k'</B>
 
@@ -1071,7 +1173,7 @@ window for <B>mbedit</B> is not resizable.
 </PRE>
 
 <CENTER><P><BR>
-Last Updated: 24 November 2018</P></CENTER>
+Last Updated: 24 July 2026</P></CENTER>
 
 <HR>
 <center>

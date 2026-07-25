@@ -1,0 +1,738 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<HTML VERSION="2.0">
+<HEAD>
+   <TITLE>MB-System Unix Manual Page: mbtrnpp</TITLE>
+<!-- WEBMAGIC VERSION NUMBER="2.0.2" -->
+<!-- WEBMAGIC TRANSLATION NAME="ServerRoot" SRC="/var/www/htdocs/" DST="/" -->
+<!-- WEBMAGIC TRANSLATION NAME="ProjectRoot" SRC="./" DST="" -->
+</HEAD>
+<BODY TEXT="#000000" BGCOLOR="#FFFFFF" LINK="#336699" VLINK="#997040" ALINK="#CC9900">
+<BODY>
+<CENTER><H3><U>MB-System Unix Manual Page</U></H3></CENTER>
+<PRE>
+<H1>mbtrnpp</H1>
+Section:  MB-System 5.0  (1)<BR>Updated:  24 July 2026 <BR><A HREF="#index">Index</A>
+<HR>
+
+<A NAME="lbAB">&nbsp;</A>
+<H2>NAME</H2>
+
+<B>mbtrnpp</B> - Real-time preprocessor that reads multibeam sonar data, applies
+automated cleaning and downsampling, and passes the resulting bathymetry to a
+terrain relative navigation (TRN) process.
+<P>
+<A NAME="lbAC">&nbsp;</A>
+<H2>VERSION</H2>
+
+Version 5.0
+<P>
+<A NAME="lbAD">&nbsp;</A>
+<H2>SYNOPSIS</H2>
+
+<B>mbtrnpp</B>
+<BR>
+
+[--verbose
+<BR>
+
+--help
+<BR>
+
+--config=path
+<BR>
+
+--log-directory=path
+<BR>
+
+--input=datalist|file|socket_definition
+<BR>
+
+--output=file|socket
+<BR>
+
+--format=format
+<BR>
+
+--platform-file=file
+<BR>
+
+--platform-target-sensor=sensor_id
+<BR>
+
+--tide-model=file
+<BR>
+
+--swath-width=value
+<BR>
+
+--soundings=value
+<BR>
+
+--median-filter=threshold/nx/ny
+<BR>
+
+--statsec=d.d
+<BR>
+
+--statflags=&lt;MSF_STATUS|MSF_EVENT|MSF_ASTAT|MSF_PSTAT|MSF_READER&gt;
+<BR>
+
+--delay=n
+<BR>
+
+--mb-out=mb1svr[:host:port]/mb1/file[:path]/reson/nomb1/noreson/nombsvr/nombtrnpp
+<BR>
+
+--mbhbn=n
+<BR>
+
+--mbhbt=d.d
+<BR>
+
+--trn-en
+<BR>
+
+--trn-dev=s
+<BR>
+
+--use-proj[=bool]
+<BR>
+
+--projection=projection_id
+<BR>
+
+--trn-crs=s
+<BR>
+
+--trn-utm=zone
+<BR>
+
+--trn-map=path
+<BR>
+
+--trn-cfg=path
+<BR>
+
+--trn-par=path
+<BR>
+
+--trn-mid=id
+<BR>
+
+--trn-mtype=n
+<BR>
+
+--trn-sensor-type=n
+<BR>
+
+--trn-ftype=n
+<BR>
+
+--trn-fgrade=n
+<BR>
+
+--trn-freinit=n
+<BR>
+
+--trn-mweight=n
+<BR>
+
+--trn-ncov=value
+<BR>
+
+--trn-nerr=value
+<BR>
+
+--trn-ecov=value
+<BR>
+
+--trn-eerr=value
+<BR>
+
+--trn-decn=n
+<BR>
+
+--trn-decs=d.d
+<BR>
+
+--covariance-magnitude-max=value
+<BR>
+
+--convergence-repeat-min=n
+<BR>
+
+--reinit-search=reinit_search_xy/reinit_search_z
+<BR>
+
+--reinit-gain[=bool]
+<BR>
+
+--reinit-file[=bool]
+<BR>
+
+--reinit-xyoffset=xyoffset_max
+<BR>
+
+--reinit-zoffset=zoffset_min/zoffset_max
+<BR>
+
+--random-offset
+<BR>
+
+--trn-out=trnsvr[:host:port]/trnusvr[:host:port]/trnumsvr[:group:port:ttl]/trnu/trnub/sout/serr/debug/notrnsvr/notrnusvr/notrnumsvr
+<BR>
+
+--trnhbt=d.d
+<BR>
+
+--trnuhbt=d.d]
+<P>
+<A NAME="lbAE">&nbsp;</A>
+<H2>DESCRIPTION</H2>
+
+<B>mbtrnpp</B> is a command line program, normally run unattended aboard an
+autonomous underwater vehicle (AUV) or other survey platform, that reads
+multibeam bathymetry in real time (from a datalist, a single swath data
+file, or a live network socket), applies automated cleaning, swath-width
+limiting, and sounding decimation, and then passes the resulting bathymetry
+soundings on to a terrain relative navigation (TRN) engine embedded in the
+program. <B>mbtrnpp</B> is one of the <B>MB-System</B> utilities in the
+<B>mbtrnutils</B> source directory; it is an optional program, built only
+when <B>MB-System</B> is configured with TRN support enabled
+(<B>--enable-mbtrn</B> with autotools, or <B>-DbuildTRN=ON</B> with
+<B>CMake</B>, both of which are the default), and further requires TRN
+support (<B>--enable-mbtnav</B> or <B>-DbuildTRNLCM</B>-related <B>CMake</B>
+options) to actually run TRN rather than simply relaying bathymetry.
+<P>
+<B>mbtrnpp</B> has no interactive display; it is configured entirely through
+command line options and, optionally, a configuration file specified with
+<B>--config</B>. The order of precedence for setting an option is (highest to
+lowest) command line options, configuration file options, and compiled-in
+defaults. Because <B>mbtrnpp</B> is normally run unattended and continuously,
+most deployments use a shell wrapper that first sources an environment file
+(setting variables such as <B>TRN_HOST</B>, <B>TRN_MAPFILES</B>,
+<B>TRN_DATAFILES</B>, and <B>TRN_LOGFILES</B> that are referenced by mnemonic
+in the configuration file and by <B>mbtrnpp</B> itself), and then invokes
+<B>mbtrnpp</B> with <B>--config</B> pointing to a configuration file tailored
+to the vehicle and mission. The <B>--help</B> option is useful even in normal
+operation, since <B>mbtrnpp</B> prints its default, configuration-file, and
+final (command-line-overridden) settings to stderr as it starts up, before
+exiting without reading any data; this allows a configuration to be checked
+without actually running a survey.
+<P>
+Input bathymetry may come from a recursive <B>MB-System</B> datalist or a
+single swath data file (in which case <B>--format</B> normally must also be
+given), read exactly as with other <B>MB-System</B> utilities, or from a live
+data socket (e.g. a Reson/Teledyne multibeam sonar or 7k Center, specified
+with an <B>--input</B> value beginning <I>socket:</I>) for real-time
+operation. As pings are read, <B>mbtrnpp</B> applies an automated median
+filter across and along track to flag anomalous soundings, limits the swath
+to the width set by <B>--swath-width</B>, and decimates each ping to the
+number of soundings set by <B>--soundings</B>. The processed soundings are
+packaged into MB1 records, which may be logged to a binary file, served to
+network clients, and/or passed directly to the embedded TRN instance for
+terrain-relative position estimation (when TRN is enabled with
+<B>--trn-en</B> and <B>MB-System</B> was built with TRN navigation support).
+TRN position estimates and updates may in turn be logged and/or served to
+network clients using the <B>--trn-out</B> option.
+<P>
+<B>mbtrnpp</B> writes several kinds of log files (an MB-System processing
+log, an mbtrnpp session log, MB1 server and TRN server/update session logs,
+the MB1 binary record log, and, if TRN is enabled, a TRN instance log
+directory) into the directory set by <B>--log-directory</B>; a symbolic link
+named <B>mbtrnpp-latest</B> pointing at this directory is created (or
+replaced) each time <B>mbtrnpp</B> starts. See the <B>README-mbtrnpp.md</B>
+file distributed with <B>MB-System</B> in <B>src/mbtrn/tools/cfg</B> for a
+complete description of the environment and configuration files, the
+network output specifiers, log file naming, and troubleshooting tips.
+<P>
+<A NAME="lbAF">&nbsp;</A>
+<H2>MB-SYSTEM AUTHORSHIP</H2>
+
+David W. Caress
+<BR>
+
+<BR>&nbsp;Monterey&nbsp;Bay&nbsp;Aquarium&nbsp;Research&nbsp;Institute
+<BR>
+
+Dale N. Chayes
+<BR>
+
+<BR>&nbsp;Center&nbsp;for&nbsp;Coastal&nbsp;and&nbsp;Ocean&nbsp;Mapping
+<BR>
+
+<BR>&nbsp;University&nbsp;of&nbsp;New&nbsp;Hampshire
+<BR>
+
+Kent Headley
+<BR>
+
+<BR>&nbsp;Monterey&nbsp;Bay&nbsp;Aquarium&nbsp;Research&nbsp;Institute
+<BR>
+
+Christian dos Santos Ferreira
+<BR>
+
+<BR>&nbsp;MARUM&nbsp;-&nbsp;Center&nbsp;for&nbsp;Marine&nbsp;Environmental&nbsp;Sciences
+<BR>
+
+<BR>&nbsp;University&nbsp;of&nbsp;Bremen
+<P>
+<A NAME="lbAG">&nbsp;</A>
+<H2>OPTIONS</H2>
+
+<DL COMPACT>
+<DT><B>--verbose</B>
+
+<DD>
+This option increases the verbosity of <B>mbtrnpp</B>, which means that more
+information than by default is output to the stderr stream of the shell.
+Negative values (e.g. <B>--verbose=-2</B>) also select the printing of the
+program name and <B>MB-System</B> version banner at startup.
+<DT><B>--help</B>
+
+<DD>
+This option causes <B>mbtrnpp</B> to print a description of what it does and
+a summary of the command line options, and then exit without reading any
+data. Because <B>mbtrnpp</B> always prints its default, configuration-file,
+and final settings to stderr before checking for <B>--help</B>, this option
+is a convenient way to verify a configuration (including one loaded with
+<B>--config</B>) without starting a survey.
+<DT><B>--config=path</B>
+
+<DD>
+This option specifies a configuration file containing any of the
+<B>mbtrnpp</B> command line options, one <I>key</I><B>=</B><I>value</I> pair
+per line (using the same option names as the command line, without the
+leading <B>--</B>). Configuration file options override the compiled-in
+defaults, and are in turn overridden by the same option given explicitly on
+the command line. The <B>--config</B> option itself is recognized before any
+other command line processing, so a configuration file may be combined with
+command-line overrides in a single invocation. See the annotated example
+configuration file <B>src/mbtrn/tools/cfg/mbtrnpp-cfg.example</B> distributed
+with <B>MB-System</B>.
+<DT><B>--log-directory=path</B>
+
+<DD>
+This option sets the directory into which <B>mbtrnpp</B> writes its log
+files (the <B>MB-System</B> processing log, the mbtrnpp and MB1/TRN server
+session logs, the MB1 binary record log, and, if TRN is enabled, the TRN
+instance log directory). The directory is created if it does not already
+exist. The default is the current working directory (<B>.</B>). A symbolic
+link named <B>mbtrnpp-latest</B> pointing at this directory is created (or
+replaced) each time <B>mbtrnpp</B> starts.
+<DT><B>--input=datalist|file|socket_definition</B>
+
+<DD>
+This option specifies the source of input bathymetry data, exactly as the
+<B>--input</B> (<B>-I</B>) option does in other <B>MB-System</B> utilities,
+with the addition of live socket input. If the value does not begin with
+<I>socket:</I>, it is read as an <B>MB-System</B> recursive datalist (in which
+case <B>--format</B> is not required, since each listed file names its own
+format) or as a single swath data file (in which case <B>--format</B> must
+also be given). If the value begins <I>socket:</I>, the remainder is a
+socket definition string (e.g. identifying a Reson/Teledyne sonar or 7k
+Center host and port) used to read multibeam pings from a live network
+connection instead of a file; <B>--format</B> must be set to the format ID
+appropriate for the socket data stream. The default input is <B>stdin</B>.
+<DT><B>--output=file|socket</B>
+
+<DD>
+This option enables output of processed MB1 records to a binary file
+and/or a network socket server. A value of <I>file</I> enables logging to a
+file with the default <B>MB-System</B>-generated name; a value of the form
+<I>file:</I><I>path</I> logs to <I>path</I> instead. A value of <I>socket</I>
+enables the MB1 socket server using its default host and port; a value of
+the form <I>socket:</I><I>host</I><B>:</B><I>port</I> overrides the host and/or
+port. Multiple comma-separated values may be given. This option predates,
+and is functionally a subset of, the more general <B>--mb-out</B> option;
+new configurations should prefer <B>--mb-out</B>.
+<DT><B>--format=format</B>
+
+<DD>
+This option sets the <B>MB-System</B> format ID of the input data, exactly
+as the <B>--format</B> (<B>-F</B>) option does in other <B>MB-System</B>
+utilities. It is required when <B>--input</B> names a single file or a live
+socket; it is not needed when <B>--input</B> names a datalist, since each
+file listed in the datalist specifies its own format.
+<DT><B>--platform-file=file</B>
+
+<DD>
+This option specifies an <B>MB-System</B> platform definition file
+describing the sensor offsets and orientation of the survey platform
+(vehicle), exactly as used by <B>mbpreprocess</B> and other <B>MB-System</B>
+utilities that support platform files. See the <B>MB-System</B> manual page
+for a description of the platform file format.
+<DT><B>--platform-target-sensor=sensor_id</B>
+
+<DD>
+This option selects, by ID, the sensor within the platform file (given by
+<B>--platform-file</B>) whose offsets are applied to the bathymetric
+soundings.
+<DT><B>--tide-model=file</B>
+
+<DD>
+This option specifies a tide model file used to remove tidal variation from
+the input bathymetry, following the same tide model file format used by
+<B>mbotps</B> and <B>mbprocess</B> elsewhere in <B>MB-System</B>.
+<DT><B>--swath-width=value</B>
+
+<DD>
+This option sets the width of the sonar swath, in decimal degrees measured
+from nadir, that is retained from each ping; soundings outside this swath
+are excluded from output. The default is 90.0 (the full swath).
+<DT><B>--soundings=value</B>
+
+<DD>
+This option sets the number of soundings output per ping after decimation.
+Soundings are selected evenly across the retained swath. The default is 11.
+<DT><B>--median-filter=threshold/nx/ny</B>
+
+<DD>
+This option enables an automated median filter applied to the bathymetry
+before decimation, and sets its parameters: <I>threshold</I> is the fractional
+deviation from the local median depth (relative to depth) beyond which a
+sounding is flagged bad, and <I>nx</I> and <I>ny</I> are respectively the
+number of soundings across track and the number of pings along track
+included in the local neighborhood used to compute the median. If this
+option is not given, the median filter is disabled.
+<DT><B>--statsec=d.d</B>
+
+<DD>
+This option sets the interval, in seconds, at which <B>mbtrnpp</B> logs
+periodic processing statistics (selected by <B>--statflags</B>).
+<DT><B>--statflags=&lt;MSF_STATUS|MSF_EVENT|MSF_ASTAT|MSF_PSTAT|MSF_READER&gt;</B>
+
+<DD>
+This option selects which categories of processing statistics
+<B>mbtrnpp</B> logs, as a <B>|</B>- (or <B>:</B>-) delimited list of flag
+names: <I>MSF_STATUS</I> enables status counters, <I>MSF_EVENT</I> enables
+event/error counters, <I>MSF_ASTAT</I> enables aggregate (cumulative)
+statistics, <I>MSF_PSTAT</I> enables periodic (interval) statistics, and
+<I>MSF_READER</I> enables statistics from the socket data reader. The
+default is <I>MSF_STATUS|MSF_EVENT|MSF_ASTAT|MSF_PSTAT</I>.
+<DT><B>--delay=n</B>
+
+<DD>
+This option sets a delay, in milliseconds, added to the main MB1 processing
+loop on each iteration; it may be used to throttle processing when input
+data arrive faster than downstream consumers (TRN, network clients) can
+keep up. The default is 0 (no delay).
+<DT><B>--mb-out=mb1svr[:host:port]/mb1/file[:path]/reson/nomb1/noreson/nombsvr/nombtrnpp</B>
+
+<DD>
+This option configures MB1 (processed bathymetry) output, as a
+<B>,</B>-delimited list of tokens: <I>mb1svr</I> (optionally followed by
+<B>:</B><I>host</I><B>:</B><I>port</I>) enables the MB1 network server;
+<I>mb1</I> enables binary MB1 record logging using the default log file
+name; <I>file</I> (optionally followed by <B>:</B><I>path</I>) enables binary
+MB1 record logging, to <I>path</I> if given; <I>reson</I> enables logging of
+the raw Reson/Teledyne S7K data frames; and the <I>no</I>-prefixed tokens
+(<I>nomb1</I>, <I>noreson</I>, <I>nombsvr</I>, <I>nombtrnpp</I>) disable the
+corresponding output (<I>nombtrnpp</I> disables the mbtrnpp message log
+itself, which is not recommended). Tokens are processed in order, so a
+later token can override an earlier one on the same command line.
+<DT><B>--mbhbn=n</B>
+
+<DD>
+This option sets the number of missed heartbeats the MB1 server tolerates
+from a client before dropping the connection.
+<DT><B>--mbhbt=d.d</B>
+
+<DD>
+This option sets the heartbeat timeout, in seconds, for the MB1 server.
+<DT><B>--trn-en</B>
+
+<DD>
+This option enables terrain relative navigation processing using the
+embedded TRN instance; <B>mbtrnpp</B> must have been built with TRN
+navigation support (<B>--enable-mbtnav</B>, or the corresponding <B>CMake</B>
+option) for TRN processing to actually occur. When disabled, <B>mbtrnpp</B>
+still reads, cleans, and outputs bathymetry, but does not attempt terrain
+navigation. TRN is enabled by default; use <B>--trn-en=N</B> (or <B>=0</B>) to
+disable it.
+<DT><B>--trn-dev=s</B>
+
+<DD>
+This option selects the sonar device type used to interpret live socket
+input, by mnemonic (e.g. <I>7125_200</I> for a Seabat 7125 at 200 kHz,
+<I>7125_400</I> for a Seabat 7125 at 400 kHz, or <I>T50</I> for a T50-S/T50-R).
+The mnemonic is translated internally to the device and system enumerator
+values required to subscribe to the sonar's data stream; see <B>r7kc.h</B> in
+the <B>MB-System</B> source for the full mapping.
+<DT><B>--use-proj[=bool]</B>
+
+<DD>
+This option enables (the default) or disables use of the <B>PROJ</B>
+cartographic projection library to convert geographic coordinates to the
+projected coordinate system used internally by TRN, instead of a simple UTM
+calculation.
+<DT><B>--projection=projection_id</B>
+
+<DD>
+This option sets the numeric <B>PROJ</B> projection ID used when
+<B>--use-proj</B> is enabled.
+<DT><B>--trn-crs=s</B>
+
+<DD>
+This option sets the <B>PROJ</B> coordinate reference system string used
+when <B>--use-proj</B> is enabled, in place of <B>--projection</B>.
+<DT><B>--trn-utm=zone</B>
+
+<DD>
+This option sets the UTM zone (an integer from 1 to 60) used for TRN
+processing when <B>--use-proj</B> is disabled (e.g. zone 9 for the axial
+seamount test site, zone 10 for Monterey Bay).
+<DT><B>--trn-map=path</B>
+
+<DD>
+This option specifies the path to the terrain reference map used by the TRN
+server; it may be a single map file or a directory of tiled map files. A
+terrain map is required for TRN processing to converge.
+<DT><B>--trn-cfg=path</B>
+
+<DD>
+This option specifies the path to the TRN configuration file, which sets
+per-vehicle TRN filter and sensor specification parameters. A TRN
+configuration file is required for TRN processing.
+<DT><B>--trn-par=path</B>
+
+<DD>
+This option specifies the path to a TRN particle filter configuration file,
+used only when the TRN particle filter is selected (see <B>--trn-ftype</B>).
+<DT><B>--trn-mid=id</B>
+
+<DD>
+This option sets the TRN mission ID string used in naming the TRN server's
+own log files and log directory.
+<DT><B>--trn-mtype=n</B>
+
+<DD>
+This option sets the TRN terrain map type: <I>1</I> selects a DEM
+(elevation grid) map, and <I>2</I> selects a bottom-object (BO) map.
+<DT><B>--trn-sensor-type=n</B>
+
+<DD>
+This option sets the TRN sensor type identifying the source of bathymetry
+supplied to TRN; the default corresponds to a generic <B>MB-System</B>
+(<B>MB1</B>) multibeam source.
+<DT><B>--trn-ftype=n</B>
+
+<DD>
+This option sets the TRN estimation filter type: <I>0</I> disables
+filtering, <I>1</I> selects a point-mass filter, <I>2</I> selects a particle
+filter, and <I>3</I> selects a filter bank.
+<DT><B>--trn-fgrade=n</B>
+
+<DD>
+This option sets the TRN filter grade: <I>0</I> selects a low-grade filter
+configuration, and <I>1</I> (the default) selects a high-grade filter
+configuration.
+<DT><B>--trn-freinit=n</B>
+
+<DD>
+This option enables (<I>1</I>, the default) or disables (<I>0</I>) automatic
+reinitialization of the TRN estimation filter, e.g. after divergence.
+<DT><B>--trn-mweight=n</B>
+
+<DD>
+This option selects the TRN modified-weighting scheme used during
+filtering: <I>0</I> applies no weighting modification, <I>1</I> applies the
+original alpha modification, <I>2</I> applies crossbeam weighting with the
+alpha modification, <I>3</I> applies subcloud weighting with the original
+alpha modification, and <I>4</I> (the default) applies subcloud weighting
+with modified NIS (normalized innovation squared) always enabled.
+<DT><B>--trn-ncov=value</B>
+
+<DD>
+This option sets the TRN convergence criterion for northing covariance; a
+TRN solution is not considered converged unless its northing covariance is
+below this value.
+<DT><B>--trn-nerr=value</B>
+
+<DD>
+This option sets the TRN convergence criterion for northing error.
+<DT><B>--trn-ecov=value</B>
+
+<DD>
+This option sets the TRN convergence criterion for easting covariance.
+<DT><B>--trn-eerr=value</B>
+
+<DD>
+This option sets the TRN convergence criterion for easting error.
+<DT><B>--trn-decn=n</B>
+
+<DD>
+This option sets the TRN update decimation modulus: a TRN position update
+is computed and issued only for every <I>n</I>th processed MB1 sounding
+record. The default is 0 (update on every record).
+<DT><B>--trn-decs=d.d</B>
+
+<DD>
+This option sets a minimum time interval, in seconds, between TRN position
+updates, as a decimation criterion alternative (or in addition) to
+<B>--trn-decn</B>.
+<DT><B>--covariance-magnitude-max=value</B>
+
+<DD>
+This option sets the maximum TRN covariance magnitude below which a TRN
+solution is considered a candidate for stable convergence; smaller values
+impose a stricter convergence requirement. A value around 10.0 is typical
+for 1-meter-scale mapping.
+<DT><B>--convergence-repeat-min=n</B>
+
+<DD>
+This option sets the number of consecutive TRN update cycles that must meet
+the convergence criteria (<B>--covariance-magnitude-max</B> and related
+limits) before the TRN solution is declared stably converged. A value
+around 400 is typical for 1-meter-scale mapping.
+<DT><B>--reinit-search=reinit_search_xy/reinit_search_z</B>
+
+<DD>
+This option sets the size, in meters, of the horizontal
+(<I>reinit_search_xy</I>) and vertical (<I>reinit_search_z</I>) search area
+used by TRN when reinitializing its position estimate. The defaults are 60
+m horizontal and 5 m vertical.
+<DT><B>--reinit-gain[=bool]</B>
+
+<DD>
+This option enables or disables gating TRN reinitialization using the
+sonar's transmit gain setting (e.g. to avoid reinitializing on pings taken
+with an atypical gain). Disabled by default.
+<DT><B>--reinit-file[=bool]</B>
+
+<DD>
+This option enables or disables reinitializing TRN whenever a new input
+file begins while reading from a datalist. Disabled by default; only
+meaningful when reading from a datalist or file rather than a live socket.
+<DT><B>--reinit-xyoffset=xyoffset_max</B>
+
+<DD>
+This option enables reinitialization of TRN whenever the magnitude of its
+converged horizontal (xy) offset from the vehicle's dead-reckoned position
+exceeds <I>xyoffset_max</I>, in meters.
+<DT><B>--reinit-zoffset=zoffset_min/zoffset_max</B>
+
+<DD>
+This option enables reinitialization of TRN whenever the magnitude of its
+converged vertical (z) offset falls below <I>zoffset_min</I> or exceeds
+<I>zoffset_max</I>, in meters.
+<DT><B>--random-offset</B>
+
+<DD>
+This option enables injection of a randomized offset into the TRN filter's
+initial position estimate; this is intended for testing TRN's ability to
+reconverge after reinitialization, and should not normally be used during
+an actual survey.
+<DT><B>--trn-out=trnsvr[:host:port]/trnusvr[:host:port]/trnumsvr[:group:port:ttl]/trnu/trnub/sout/serr/debug/notrnsvr/notrnusvr/notrnumsvr</B>
+
+<DD>
+This option configures TRN position/update output, as a <B>,</B>-delimited
+list of tokens: <I>trnsvr</I> (optionally followed by
+<B>:</B><I>host</I><B>:</B><I>port</I>) enables the TRN TCP server interface;
+<I>trnusvr</I> (optionally followed by <B>:</B><I>host</I><B>:</B><I>port</I>)
+enables the TRN update (TRNU) TCP server; <I>trnumsvr</I> (optionally
+followed by <B>:</B><I>group</I><B>:</B><I>port</I><B>:</B><I>ttl</I>) enables a
+TRN update UDP multicast server; <I>trnu</I> enables ASCII logging of TRN
+update records, and <I>trnub</I> enables binary logging of the same;
+<I>sout</I> and <I>serr</I> send TRN output to stdout and stderr,
+respectively; <I>debug</I> enables verbose TRN debug output; and the
+<I>no</I>-prefixed tokens (<I>notrnsvr</I>, <I>notrnusvr</I>, <I>notrnumsvr</I>)
+disable the corresponding server. The mnemonics <B>TRN_HOST</B> and
+<B>TRN_GROUP</B> may be used in place of an explicit <I>host</I> or
+<I>group</I>, in which case the corresponding environment variable is
+substituted at run time.
+<DT><B>--trnhbt=d.d</B>
+
+<DD>
+This option sets the heartbeat timeout, in seconds, for the TRN TCP server.
+<DT><B>--trnuhbt=d.d</B>
+
+<DD>
+This option sets the heartbeat timeout, in seconds, for the TRN update
+(TRNU) TCP server.
+<P>
+</DL>
+<A NAME="lbAH">&nbsp;</A>
+<H2>EXAMPLES</H2>
+
+Suppose you want to check a mission configuration before running a survey,
+without actually starting to process data. Sourcing the mission's
+environment file first makes its mnemonic variables (<B>TRN_HOST</B>,
+<B>TRN_MAPFILES</B>, and so on) available for substitution in the
+configuration file:
+<BR>
+
+<BR>&nbsp;&nbsp;&nbsp;&nbsp;.&nbsp;env/mbtrnpp-Sentry.env
+<BR>
+
+<BR>&nbsp;&nbsp;&nbsp;&nbsp;mbtrnpp&nbsp;--config=TRNcfg/mbtrnpp-Sentry.cfg&nbsp;--help
+<BR>
+
+<B>mbtrnpp</B> prints its default settings, the settings loaded from the
+configuration file, and the final effective settings to stderr, then exits
+without reading any data.
+<P>
+To actually run the same configuration as a real-time TRN preprocessor,
+logging to a mission-specific log directory:
+<BR>
+
+<BR>&nbsp;&nbsp;&nbsp;&nbsp;.&nbsp;env/mbtrnpp-Sentry.env
+<BR>
+
+<BR>&nbsp;&nbsp;&nbsp;&nbsp;mbtrnpp&nbsp;--config=TRNcfg/mbtrnpp-Sentry.cfg&nbsp;\
+<BR>
+
+<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;--log-directory=/home/mappingauv/logs/mbtrnpp
+<P>
+To process a single existing swath file offline (e.g. to test cleaning and
+TRN convergence against a previously recorded survey) rather than a live
+sonar socket, overriding the configuration file's <B>--input</B> setting:
+<BR>
+
+<BR>&nbsp;&nbsp;&nbsp;&nbsp;mbtrnpp&nbsp;--config=TRNcfg/mbtrnpp-Sentry.cfg&nbsp;\
+<BR>
+
+<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;--input=20240510_120000.mb88&nbsp;--format=88
+<P>
+<A NAME="lbAI">&nbsp;</A>
+<H2>SEE ALSO</H2>
+
+<B><A HREF="mbsystem.html">mbsystem</A></B>(1), <B><A HREF="mbio.html">mbio</A></B>(1), <B><A HREF="mbpreprocess.html">mbpreprocess</A></B>(1), <B><A HREF="mbclean.html">mbclean</A></B>(1),
+<B><A HREF="mbotps.html">mbotps</A></B>(1)
+<P>
+<A NAME="lbAJ">&nbsp;</A>
+<H2>BUGS</H2>
+
+Unsupervised real-time terrain navigation is inherently harder to debug than
+the interactive <B>MB-System</B> tools it borrows cleaning logic from; when
+something looks wrong, start by rereading the log files and rechecking the
+configuration with <B>--help</B> before suspecting the code.
+<P>
+
+<HR>
+<A NAME="index">&nbsp;</A><H2>Index</H2>
+<DL>
+<DT><A HREF="#lbAB">NAME</A><DD>
+<DT><A HREF="#lbAC">VERSION</A><DD>
+<DT><A HREF="#lbAD">SYNOPSIS</A><DD>
+<DT><A HREF="#lbAE">DESCRIPTION</A><DD>
+<DT><A HREF="#lbAF">MB-SYSTEM AUTHORSHIP</A><DD>
+<DT><A HREF="#lbAG">OPTIONS</A><DD>
+<DT><A HREF="#lbAH">EXAMPLES</A><DD>
+<DT><A HREF="#lbAI">SEE ALSO</A><DD>
+<DT><A HREF="#lbAJ">BUGS</A><DD>
+</DL>
+<HR>
+</PRE>
+
+<CENTER><P><BR>
+Last Updated: 24 July 2026</P></CENTER>
+
+<HR>
+<center>
+<p>
+<a href="https://www.mbari.org/products/research-software/mb-system/"><< MB-System website</a> | <a href="https://www.mbari.org/technology/mb-system/documentation/"> MB-System Documenation>></a> | <a href="mbsystem_man_list.html">MB-System Manual Page List</a></p>
+</center>
+</BODY>
+</HTML>

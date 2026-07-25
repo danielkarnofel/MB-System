@@ -30,7 +30,7 @@ Version 5.0
 <B>mbsegylist</B> [<B>-A</B> <B>-D</B><I>decimate</I>
 <B>-H</B> <B>-G</B><I>delimeter</I> <B>-I</B><I>infilename</I>
 <B>-L</B><I>lonflip</I> <B>-O</B><I>output_format</I>
-<B>-V</B> <B>-Z</B><I>segment</I>]
+<B>-V</B> <B>-W</B> <B>-Z</B><I>segment</I>]
 <P>
 <A NAME="lbAE">&nbsp;</A>
 <H2>DESCRIPTION</H2>
@@ -237,6 +237,13 @@ Normally, <B>mbsegylist</B> works &quot;silently&quot; without outputting
 anything to the stderr stream.  If the
 <B>-V</B> flag is given, then <B>mbsegylist</B> works in a &quot;verbose&quot; mode and
 outputs the program version being used and all error status messages.
+<DT><B>-W</B>
+
+<DD>
+Normally, <B>mbsegylist</B> outputs the sonar depth (<B>Z</B>) and water
+depth (<B>z</B>) values in meters.  If the
+<B>-W</B> flag is given, then <B>mbsegylist</B> outputs these values
+in feet.
 <DT><B>-Z</B>
 
 <DD>

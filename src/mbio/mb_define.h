@@ -36,8 +36,8 @@
 #include <stdint.h>
 
 /* Define version and date for this release */
-#define MB_VERSION "5.8.3beta14"
-#define MB_VERSION_DATE "6 July 2026"
+#define MB_VERSION "5.8.3beta15"
+#define MB_VERSION_DATE "25 July 2026"
 
 /* CMake supports current OS's and so there is only one form of RPC and XDR and no mb_config.h file */
 #ifdef CMAKE_BUILD_SYSTEM
@@ -49,9 +49,9 @@
 #  include <rpc/rpc.h>
 #  include <rpc/types.h>
 #  include <rpc/xdr.h>
-#endif
+#endif // end _WIN32
 
-#else // Begin Autotools section supporting legacy OS's
+#else // End CMAKE_BUILD_SYSTEM, Begin Autotools section supporting legacy OS's
 
 #include <mb_config.h>
 
@@ -62,7 +62,7 @@
 #  endif
 #  include <WinSock2.h>
 #  include <Windows.h>
-#endif
+#endif // end _WIN32
 
 /* For XDR/RPC */
 #ifndef _WIN32

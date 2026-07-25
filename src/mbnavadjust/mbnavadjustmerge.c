@@ -3012,7 +3012,7 @@ int main(int argc, char **argv) {
       status = mbnavadjust_autopick(verbose, &project_output, autopick_crossing_type, autopick_scope_mode,
                                     autopick_survey_select, autopick_survey_select1, autopick_survey_select2,
                                     autopick_file_select, autopick_section_select, autopick_overlap_threshold,
-                                    mods[imod].flag1, &error);
+                                    mods[imod].flag1, NULL, &error);
       fprintf(stderr, "Autopick complete:\n\t%d crossings\n\t%d ties\n", project_output.num_crossings,
               project_output.num_ties);
       break;

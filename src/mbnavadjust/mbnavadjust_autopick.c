@@ -1326,7 +1326,8 @@ void mbnavadjust_naverr_scale() {
 int mbnavadjust_autopick(int verbose, struct mbna_project *project_ptr, int crossing_type, int scope_mode,
                          int survey_select, int survey_select1, int survey_select2,
                          int file_select, int section_select,
-                         double overlap_threshold, bool do_vertical, int *error) {
+                         double overlap_threshold, bool do_vertical,
+                         void (*progress_callback)(void), int *error) {
   mbna_verbose = verbose;
 
   if (mbna_verbose >= 2) {
@@ -1726,6 +1727,12 @@ int mbnavadjust_autopick(int verbose, struct mbna_project *project_ptr, int cros
         if (mbna_verbose > 0)
           fprintf(stderr, "mbna_file_select:%d mbna_survey_select:%d mbna_section_select:%d\n", mbna_file_select,
                   mbna_survey_select, mbna_section_select);
+
+        /* periodically refresh the GUI (crossing/section/tie list display
+            and model plot, if open) so long autopick runs are not silently
+            unresponsive-looking; a no-op for the CLI, which passes NULL */
+        if (progress_callback != NULL && nprocess % 10 == 0)
+          (*progress_callback)();
       }
     }
 

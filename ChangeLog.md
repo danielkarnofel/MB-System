@@ -348,6 +348,40 @@ avoid matching short sections at the end of a file); this is now reported to the
 message stating the crossing was skipped due to short section length, whether autopick is
 run interactively or via mbnavadjustmerge.
 
+Program mbnavadjust: Fixed a segmentation fault when dismissing the Nav Err (crossing
+analysis) window while no crossing was currently loaded - for example immediately after
+clearing all ties to start over with a project. The dismiss callback freed the window's
+graphics contexts unconditionally instead of only when a crossing had actually been loaded
+(as the equivalent code in the Quit handler already correctly does), so dismissing the
+window a second time without an intervening crossing load double-freed them, crashing in
+Xlib's XFreeGC(). Diagnosed directly from the macOS crash report, which resolved exactly to
+the offending XFreeGC() call once the crash binary's UUID was confirmed to match the current
+build.
+
+Program mbnavadjust: Fixed the Controls dialog showing stale values when opened via the Nav
+Err window's Settings->Contours menu item, rather than the current project settings shown
+when it is opened via the main window's Option->Controls menu item. The main window's button
+has two callbacks - one that refreshes every slider and toggle from the project settings,
+followed by one that displays the dialog - while the Nav Err window's button only had the
+second, display-only callback, so it showed whatever values happened to be left over from
+the last time the dialog was shown or applied. Fixed by adding the missing refresh callback.
+
+Program mbnavadjust: During autopicking, the crossing/section/tie list display and model
+plot (if open) did not update again until the entire run finished, since the loop that used
+to periodically refresh them lost access to those GUI functions once it was moved into the
+shared mbnavadjust_core library. They are now refreshed every tenth crossing processed via a
+callback function pointer passed in only by the interactive program; mbnavadjustmerge passes
+none, so the shared autopick loop itself has no GUI dependency.
+
+Program mbnavadjust: Fixed the grid region used by Update Grids, which was computed from
+each section's original, unadjusted geographic bounds and never updated afterward regardless
+of any navigation inversion performed since - a solution that moved sections a significant
+distance could leave the grid too small to encompass the shifted data. The region is now
+recalculated from each section's original bounds shifted by the range of its current
+navigation adjustment. The per-survey grids' region, previously computed but never actually
+passed to mbgrid (relying solely on mbgrid's own bounds auto-detection), is now adjusted the
+same way and passed explicitly, matching the overall project grid.
+
 Programs mbedit, mbnavedit, and mbvelocitytool: A memory-management and correctness audit
 of these three interactive Motif editors (paralleling the earlier audits of src/utilities
 and mbview/mbeditviz) found and fixed a critical NULL-pointer-write crash in mbnavedit's

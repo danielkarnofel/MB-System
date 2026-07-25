@@ -4121,14 +4121,19 @@ void do_naverr_dismiss(Widget w, XtPointer client_data, XtPointer call_data) {
   if (mbna_naverr_mode != MBNA_NAVERR_MODE_UNLOADED) {
     status = mbnavadjust_crossing_unload();
     status = mbnavadjust_referencegrid_unload();
+
+    /* deallocate graphics (only allocated when a crossing was actually
+        loaded - matches the guard already used in do_quit(); freeing these
+        unconditionally double-frees cont_gc/corr_gc whenever dismiss is
+        invoked with no crossing loaded, e.g. immediately after clearing
+        all ties, crashing in XFreeGC/_XFreeExtData) */
+    XFreeGC(display, cont_gc);
+    XFreeGC(display, corr_gc);
+    xg_free(cont_xgid);
+    xg_free(corr_xgid);
   }
 
-  /* deallocate graphics */
   mbna_status = MBNA_STATUS_GUI;
-  XFreeGC(display, cont_gc);
-  XFreeGC(display, corr_gc);
-  xg_free(cont_xgid);
-  xg_free(corr_xgid);
   mbna_current_crossing = MBV_SELECT_NONE;
   mbna_current_tie = MBV_SELECT_NONE;
   mbna_current_file = MBV_SELECT_NONE;
@@ -5786,6 +5791,18 @@ void do_action_tie_fixed(Widget w, XtPointer client_data, XtPointer call_data) {
 }
 /*--------------------------------------------------------------------*/
 
+/* called by mbnavadjust_autopick() every tenth crossing it processes, so
+    the crossing/section/tie list display and model plot (if open) do not
+    sit unrefreshed for the whole duration of a long autopick run */
+static void do_action_autopick_progress(void) {
+  do_update_status();
+  XmUpdateDisplay(list_data);
+  if (project.modelplot) {
+    do_update_modelplot_status();
+    mbnavadjust_modelplot_plot(__FILE__, __LINE__);
+  }
+}
+
 void do_action_autopick(Widget w, XtPointer client_data, XtPointer call_data) {
   (void)w; // Unused parameter
   (void)client_data; // Unused parameter
@@ -5797,7 +5814,7 @@ void do_action_autopick(Widget w, XtPointer client_data, XtPointer call_data) {
   mbna_status = MBNA_STATUS_AUTOPICK;
   mbnavadjust_autopick(mbna_verbose, &project, mbna_view_list, mbna_view_mode, mbna_survey_select, mbna_survey_select1,
                        mbna_survey_select2, mbna_file_select, mbna_section_select, MBNA_MEDIOCREOVERLAP_THRESHOLD,
-                       true, &error);
+                       true, do_action_autopick_progress, &error);
   mbna_status = MBNA_STATUS_GUI;
   do_update_status();
   if (project.modelplot) {
@@ -5822,7 +5839,7 @@ void do_action_autopickhorizontal(Widget w, XtPointer client_data, XtPointer cal
   mbna_status = MBNA_STATUS_AUTOPICK;
   mbnavadjust_autopick(mbna_verbose, &project, mbna_view_list, mbna_view_mode, mbna_survey_select, mbna_survey_select1,
                        mbna_survey_select2, mbna_file_select, mbna_section_select, MBNA_MEDIOCREOVERLAP_THRESHOLD,
-                       false, &error);
+                       false, do_action_autopick_progress, &error);
   mbna_status = MBNA_STATUS_GUI;
   do_update_status();
   if (project.modelplot) {

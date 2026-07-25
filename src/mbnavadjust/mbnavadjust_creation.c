@@ -2827,6 +2827,7 @@ Widget CreatemainWindow(Widget parent) {
 		XmStringFree((XmString)tmp0);
 	}
 
+	XtAddCallback(pushButton_naverr_controls, XmNactivateCallback, do_controls_show, (XtPointer)0);
 	XtAddCallback(pushButton_naverr_controls, XmNactivateCallback, BxManageCB, (XtPointer) "form_controls");
 
 	ac = 0;

@@ -281,7 +281,8 @@ void mbnavadjust_naverr_scale(void);
 int mbnavadjust_autopick(int verbose, struct mbna_project *project_ptr, int crossing_type, int scope_mode,
                          int survey_select, int survey_select1, int survey_select2,
                          int file_select, int section_select,
-                         double overlap_threshold, bool do_vertical, int *error);
+                         double overlap_threshold, bool do_vertical,
+                         void (*progress_callback)(void), int *error);
 
 /* GUI-free network-adjustment navigation solver, reference grid
     regeneration, and corrected-navigation output, shared by mbnavadjust

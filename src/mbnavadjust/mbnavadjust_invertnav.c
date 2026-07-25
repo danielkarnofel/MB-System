@@ -3330,12 +3330,58 @@ int mbnavadjust_updategrid(int verbose, struct mbna_project *project_ptr) {
       }
     }
 
-    double dlon = 0.1 * (project.lon_max - project.lon_min);
-    double dlat = 0.1 * (project.lat_max - project.lat_min);
-    lon_min = project.lon_min - dlon;
-    lon_max = project.lon_max + dlon;
-    lat_min = project.lat_min - dlat;
-    lat_max = project.lat_max + dlat;
+    /* Recompute the grid bounds from each section's original bounds shifted
+        by its current navigation adjustment (snav_lon_offset/snav_lat_offset),
+        rather than from the unadjusted project.lon_min/lon_max/lat_min/lat_max
+        (which are only ever set from the original, unadjusted section
+        bounds - see mbnavadjust_io.c). Without this, a navigation solution
+        that moves sections a significant distance can leave the grid region
+        too small to encompass the adjusted data. The min/max offset over
+        each section's navigation control points is used (rather than just
+        one endpoint) since the offset is not necessarily uniform along a
+        section. */
+    double lon_min_adj, lon_max_adj, lat_min_adj, lat_max_adj;
+    bool first_overall = true;
+    for (int ifile = 0; ifile < project.num_files; ifile++) {
+      file = &project.files[ifile];
+      for (int isection = 0; isection < file->num_sections; isection++) {
+        section = &file->sections[isection];
+        double lon_offset_min = section->snav_lon_offset[0];
+        double lon_offset_max = section->snav_lon_offset[0];
+        double lat_offset_min = section->snav_lat_offset[0];
+        double lat_offset_max = section->snav_lat_offset[0];
+        for (int isnav = 1; isnav < section->num_snav; isnav++) {
+          lon_offset_min = MIN(lon_offset_min, section->snav_lon_offset[isnav]);
+          lon_offset_max = MAX(lon_offset_max, section->snav_lon_offset[isnav]);
+          lat_offset_min = MIN(lat_offset_min, section->snav_lat_offset[isnav]);
+          lat_offset_max = MAX(lat_offset_max, section->snav_lat_offset[isnav]);
+        }
+        double section_lon_min = section->lonmin + lon_offset_min;
+        double section_lon_max = section->lonmax + lon_offset_max;
+        double section_lat_min = section->latmin + lat_offset_min;
+        double section_lat_max = section->latmax + lat_offset_max;
+        if (first_overall) {
+          lon_min_adj = section_lon_min;
+          lon_max_adj = section_lon_max;
+          lat_min_adj = section_lat_min;
+          lat_max_adj = section_lat_max;
+          first_overall = false;
+        }
+        else {
+          lon_min_adj = MIN(lon_min_adj, section_lon_min);
+          lon_max_adj = MAX(lon_max_adj, section_lon_max);
+          lat_min_adj = MIN(lat_min_adj, section_lat_min);
+          lat_max_adj = MAX(lat_max_adj, section_lat_max);
+        }
+      }
+    }
+
+    double dlon = 0.1 * (lon_max_adj - lon_min_adj);
+    double dlat = 0.1 * (lat_max_adj - lat_min_adj);
+    lon_min = lon_min_adj - dlon;
+    lon_max = lon_max_adj + dlon;
+    lat_min = lat_min_adj - dlat;
+    lat_max = lat_max_adj + dlat;
     snprintf(apath, sizeof(apath), "%s/mbgrid_adj.cmd", project.datadir);
     if ((afp = fopen(apath, "w")) != NULL) {
       fprintf(afp, "mbgrid -I datalistp.mb-1 \\\n\t-R%.8f/%.8f/%.8f/%.8f \\\n\t-A2 -F5 -N -C2 \\\n\t-O ProjectTopoAdj\n\n",
@@ -3345,18 +3391,34 @@ int mbnavadjust_updategrid(int verbose, struct mbna_project *project_ptr) {
         bool first_file = true;
         for (int ifile = 0; ifile < project.num_files; ifile++) {
           if (project.files[ifile].survey == isurvey) {
-            for (int isection=0; isection < project.files[ifile].num_sections; isection++) {
+            file = &project.files[ifile];
+            for (int isection=0; isection < file->num_sections; isection++) {
+              section = &file->sections[isection];
+              double lon_offset_min = section->snav_lon_offset[0];
+              double lon_offset_max = section->snav_lon_offset[0];
+              double lat_offset_min = section->snav_lat_offset[0];
+              double lat_offset_max = section->snav_lat_offset[0];
+              for (int isnav = 1; isnav < section->num_snav; isnav++) {
+                lon_offset_min = MIN(lon_offset_min, section->snav_lon_offset[isnav]);
+                lon_offset_max = MAX(lon_offset_max, section->snav_lon_offset[isnav]);
+                lat_offset_min = MIN(lat_offset_min, section->snav_lat_offset[isnav]);
+                lat_offset_max = MAX(lat_offset_max, section->snav_lat_offset[isnav]);
+              }
+              double section_lon_min = section->lonmin + lon_offset_min;
+              double section_lon_max = section->lonmax + lon_offset_max;
+              double section_lat_min = section->latmin + lat_offset_min;
+              double section_lat_max = section->latmax + lat_offset_max;
               if (first_file && isection == 0) {
                 first_file = false;
-                lon_min = project.files[ifile].sections[isection].lonmin;
-                lon_max = project.files[ifile].sections[isection].lonmax;
-                lat_min = project.files[ifile].sections[isection].latmin;
-                lat_max = project.files[ifile].sections[isection].latmax;
+                lon_min = section_lon_min;
+                lon_max = section_lon_max;
+                lat_min = section_lat_min;
+                lat_max = section_lat_max;
               } else {
-                lon_min = MIN(project.files[ifile].sections[isection].lonmin, lon_min);
-                lon_max = MAX(project.files[ifile].sections[isection].lonmax, lon_max);
-                lat_min = MIN(project.files[ifile].sections[isection].latmin, lat_min);
-                lat_max = MAX(project.files[ifile].sections[isection].latmax, lat_max);
+                lon_min = MIN(section_lon_min, lon_min);
+                lon_max = MAX(section_lon_max, lon_max);
+                lat_min = MIN(section_lat_min, lat_min);
+                lat_max = MAX(section_lat_max, lat_max);
               }
             }
           }
@@ -3365,8 +3427,8 @@ int mbnavadjust_updategrid(int verbose, struct mbna_project *project_ptr) {
         lon_max += dlon;
         lat_min -= dlat;
         lat_max += dlat;
-        fprintf(afp, "mbgrid -I datalist_%4.4dp.mb-1 \\\n\t-A2 -F5 -N -C2 \\\n\t-O ProjectTopoAdj_%4.4d\n\n",
-                isurvey, isurvey);
+        fprintf(afp, "mbgrid -I datalist_%4.4dp.mb-1 \\\n\t-R%.8f/%.8f/%.8f/%.8f \\\n\t-A2 -F5 -N -C2 \\\n\t-O ProjectTopoAdj_%4.4d\n\n",
+                isurvey, lon_min, lon_max, lat_min, lat_max, isurvey);
       }
       fclose(afp);
     }

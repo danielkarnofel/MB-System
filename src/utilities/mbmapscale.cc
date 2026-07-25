@@ -54,23 +54,49 @@ constexpr char help_message[] =
     "and local meters east and north at a user defined latitude. The map scale is\n"
     "written to stdout in the form of meters per degree longitude and latitude.";
 constexpr char usage_message[] =
-    "mbmapscale [-Llatitude -A -V -H]";
+    "mbmapscale\n"
+    "\t--alvinxy {-A}\n"
+    "\t--help {-H}\n"
+    "\t--latitude=latitude {-Llatitude}\n"
+    "\t--verbose {-V}\n\n";
 
 /*--------------------------------------------------------------------*/
 
 int main(int argc, char **argv) {
 	int verbose = 0;
 	int mode = MBMAPSCALE_MODE_WGS72;
-	double latitude;
+	double latitude = 0.0;
 	int status = MB_SUCCESS;
 
 	/* process argument list */
 	{
+		static struct option options[] = {{"verbose", no_argument, nullptr, 0},
+		                                   {"help", no_argument, nullptr, 0},
+		                                   {"alvinxy", no_argument, nullptr, 0},
+		                                   {"latitude", required_argument, nullptr, 0},
+		                                   {nullptr, 0, nullptr, 0}};
+
+		int option_index;
 		bool errflg = false;
 		int c;
 		bool help = false;
-		while ((c = getopt(argc, argv, "VvHhAaL:l:")) != -1)
+		while ((c = getopt_long(argc, argv, "VvHhAaL:l:", options, &option_index)) != -1)
 			switch (c) {
+			/* long options all return c=0 */
+			case 0:
+				if (strcmp("verbose", options[option_index].name) == 0) {
+					verbose++;
+				}
+				else if (strcmp("help", options[option_index].name) == 0) {
+					help = true;
+				}
+				else if (strcmp("alvinxy", options[option_index].name) == 0) {
+					mode = MBMAPSCALE_MODE_ALVINXY;
+				}
+				else if (strcmp("latitude", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf", &latitude);
+				}
+				break;
 			case 'H':
 			case 'h':
 				help = true;

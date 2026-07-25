@@ -45,6 +45,7 @@
 #include "mb_process.h"
 #include "mb_status.h"
 #include "mbnavadjust_io.h"
+#include "mbnavadjust_core.h"
 
 #define MBNAVADJUSTMERGE_MODE_NONE 0
 #define MBNAVADJUSTMERGE_MODE_ADD 1
@@ -52,6 +53,7 @@
 #define MBNAVADJUSTMERGE_MODE_COPY 3
 #define MBNAVADJUSTMERGE_MODE_MODIFY 4
 #define MBNAVADJUSTMERGE_MODE_TRIANGULATE 5
+#define MBNAVADJUSTMERGE_MODE_CREATE 6
 #define NUMBER_MODS_MAX 1000
 #define MOD_MODE_NONE 0
 #define MOD_MODE_SET_GLOBAL_TIE 1
@@ -103,9 +105,9 @@
 #define MOD_MODE_INSERT_DISCONTINUITY 47
 #define MOD_MODE_REMOVE_DISCONTINUITY 48
 #define MOD_MODE_MERGE_SURVEYS 49
-#define MOD_MODE_REIMPORT_FILE 50
-#define MOD_MODE_REIMPORT_SURVEY 51
-#define MOD_MODE_REIMPORT_ALL_FILES 52
+#define MOD_MODE_UPDATE_FILE 50
+#define MOD_MODE_UPDATE_SURVEY 51
+#define MOD_MODE_UPDATE_ALL_FILES 52
 #define MOD_MODE_TRIANGULATE 53
 #define MOD_MODE_TRIANGULATE_SECTION 54
 #define MOD_MODE_UNSET_SHORT_SECTION_TIES 55
@@ -114,6 +116,12 @@
 #define MOD_MODE_REMOVE_FILE 58
 #define MOD_MODE_REMAKE_MB166_FILES 59
 #define MOD_MODE_FIX_SENSORDEPTH 60
+#define MOD_MODE_IMPORT_DATA 61
+#define MOD_MODE_FIND_CROSSINGS 62
+#define MOD_MODE_AUTOPICK 64
+#define MOD_MODE_INVERT_NAVIGATION 65
+#define MOD_MODE_UPDATE_GRIDS 66
+#define MOD_MODE_APPLY_NAVIGATION 67
 #define IMPORT_NONE 0
 #define IMPORT_TIE 1
 #define IMPORT_GLOBALTIE 2
@@ -138,6 +146,9 @@ struct mbnavadjust_mod {
   double ysigma;
   double zsigma;
   double dt;
+  mb_path path1;    /* MOD_MODE_IMPORT_DATA: path to swath file or datalist */
+  int format1;      /* MOD_MODE_IMPORT_DATA: mbio format, -1 = datalist */
+  bool flag1;       /* MOD_MODE_IMPORT_DATA: import all files as a single new survey */
 };
 
 static char program_name[] = "mbnavadjustmerge";
@@ -146,6 +157,31 @@ static char usage_message[] =
     "mbnavadjustmerge --input=project_path \n"
     "\t[--input=project_path\n"
     "\t--output=project_path\n"
+    "\t--create-project=project_path\n"
+    "\t--section-length=km\n"
+    "\t--section-soundings=count\n"
+    "\t--contour-interval=meters\n"
+    "\t--color-interval=meters\n"
+    "\t--tick-interval=meters\n"
+    "\t--label-interval=meters\n"
+    "\t--decimation=value\n"
+    "\t--smoothing=value\n"
+    "\t--zoffsetwidth=meters\n"
+    "\t--import=path[:format]\n"
+    "\t--import-as-survey=path[:format]\n"
+    "\t--find-crossings\n"
+    "\t--autopick\n"
+    "\t--autopick-horizontal\n"
+    "\t--autopick-crossing-type=all|mediocre|good|better|true\n"
+    "\t--autopick-scope=all|survey|withsurvey|block|file|withfile|withsection\n"
+    "\t--autopick-survey=survey\n"
+    "\t--autopick-survey2=survey\n"
+    "\t--autopick-file=file\n"
+    "\t--autopick-section=section\n"
+    "\t--autopick-overlap-threshold=percent\n"
+    "\t--invert-navigation\n"
+    "\t--update-grids\n"
+    "\t--apply-navigation\n"
     "\t--set-global-tie=file:section[:snav]/xoffset/yoffset/zoffset[/xsigma/ysigma/zsigma]\n"
     "\t--set-global-tie-relative=file:section[:snav]/xoffset/yoffset/zoffset[/xsigma/ysigma/zsigma]\n"
     "\t--set-global-tie-xyz=file:section[:snav]\n"
@@ -195,9 +231,9 @@ static char usage_message[] =
     "\t--insert-discontinuity=file:section\n"
     "\t--remove-discontinuity=file:section\n"
     "\t--merge-surveys=survey1:survey2\n"
-    "\t--reimport-file=file\n"
-    "\t--reimport-survey=survey\n"
-    "\t--reimport-all-files\n"
+    "\t--update-file=file\n"
+    "\t--update-survey=survey\n"
+    "\t--update-all-files\n"
     "\t--import-tie-list=file\n"
     "\t--export-tie-list=file\n"
     "\t--triangulate\n"
@@ -225,6 +261,8 @@ int main(int argc, char **argv) {
   mb_path project_inputadd_path = "";
   bool project_output_set = false;
   mb_path project_output_path = "";
+  bool project_create_set = false;
+  mb_path project_create_path = "";
 
   int num_mods = 0;
   struct mbnavadjust_mod mods[NUMBER_MODS_MAX];
@@ -234,6 +272,29 @@ int main(int argc, char **argv) {
   mb_path import_tie_list_path;
   int export_tie_list_set = false;
   mb_path export_tie_list_path;
+
+  /* project settings changes - applied via MOD_MODE_APPLY_SETTINGS */
+  unsigned int settings_mask = 0;
+  double set_section_length = 0.20;
+  int set_section_soundings = 400000;
+  double set_cont_int = 1.0;
+  double set_col_int = 5.0;
+  double set_tick_int = 5.0;
+  double set_label_int = 100000.0;
+  int set_decimation = 1;
+  double set_smoothing = MBNA_SMOOTHING_DEFAULT;
+  double set_zoffsetwidth = 1.0;
+
+  /* autopick parameters - applied via MOD_MODE_AUTOPICK */
+  bool do_vertical = false;
+  int autopick_crossing_type = MBNA_VIEW_LIST_CROSSINGS;
+  int autopick_scope_mode = MBNA_VIEW_MODE_ALL;
+  int autopick_survey_select = 0;
+  int autopick_survey_select1 = 0;
+  int autopick_survey_select2 = 0;
+  int autopick_file_select = 0;
+  int autopick_section_select = 0;
+  double autopick_overlap_threshold = MBNA_MEDIOCREOVERLAP_THRESHOLD;
 
   int triangulate = TRIANGULATE_NONE;
   double triangle_scale = 0.0;
@@ -246,6 +307,31 @@ int main(int argc, char **argv) {
                                     {"help", no_argument, NULL, 0},
                                     {"input", required_argument, NULL, 0},
                                     {"output", required_argument, NULL, 0},
+                                    {"create-project", required_argument, NULL, 0},
+                                    {"section-length", required_argument, NULL, 0},
+                                    {"section-soundings", required_argument, NULL, 0},
+                                    {"contour-interval", required_argument, NULL, 0},
+                                    {"color-interval", required_argument, NULL, 0},
+                                    {"tick-interval", required_argument, NULL, 0},
+                                    {"label-interval", required_argument, NULL, 0},
+                                    {"decimation", required_argument, NULL, 0},
+                                    {"smoothing", required_argument, NULL, 0},
+                                    {"zoffsetwidth", required_argument, NULL, 0},
+                                    {"import", required_argument, NULL, 0},
+                                    {"import-as-survey", required_argument, NULL, 0},
+                                    {"find-crossings", no_argument, NULL, 0},
+                                    {"autopick", no_argument, NULL, 0},
+                                    {"autopick-horizontal", no_argument, NULL, 0},
+                                    {"autopick-crossing-type", required_argument, NULL, 0},
+                                    {"autopick-scope", required_argument, NULL, 0},
+                                    {"autopick-survey", required_argument, NULL, 0},
+                                    {"autopick-survey2", required_argument, NULL, 0},
+                                    {"autopick-file", required_argument, NULL, 0},
+                                    {"autopick-section", required_argument, NULL, 0},
+                                    {"autopick-overlap-threshold", required_argument, NULL, 0},
+                                    {"invert-navigation", no_argument, NULL, 0},
+                                    {"update-grids", no_argument, NULL, 0},
+                                    {"apply-navigation", no_argument, NULL, 0},
                                     {"set-global-tie", required_argument, NULL, 0},
                                     {"set-global-tie-relative", required_argument, NULL, 0},
                                     {"set-global-tie-xyz", required_argument, NULL, 0},
@@ -294,9 +380,9 @@ int main(int argc, char **argv) {
                                     {"insert-discontinuity", required_argument, NULL, 0},
                                     {"remove-discontinuity", required_argument, NULL, 0},
                                     {"merge-surveys", required_argument, NULL, 0},
-                                    {"reimport-file", required_argument, NULL, 0},
-                                    {"reimport-survey", required_argument, NULL, 0},
-                                    {"reimport-all-files", no_argument, NULL, 0},
+                                    {"update-file", required_argument, NULL, 0},
+                                    {"update-survey", required_argument, NULL, 0},
+                                    {"update-all-files", no_argument, NULL, 0},
                                     {"import-tie-list", required_argument, NULL, 0},
                                     {"export-tie-list", required_argument, NULL, 0},
                                     {"triangulate", no_argument, NULL, 0},
@@ -337,11 +423,11 @@ int main(int argc, char **argv) {
       /* input */
       else if (strcmp("input", options[option_index].name) == 0) {
         if (!project_inputbase_set) {
-          strcpy(project_inputbase_path, optarg);
+          snprintf(project_inputbase_path, sizeof(mb_path), "%s", optarg);
           project_inputbase_set = true;
         }
         else if (!project_inputadd_set) {
-          strcpy(project_inputadd_path, optarg);
+          snprintf(project_inputadd_path, sizeof(mb_path), "%s", optarg);
           project_inputadd_set = true;
          }
         else {
@@ -353,11 +439,228 @@ int main(int argc, char **argv) {
       /* output */
       else if (strcmp("output", options[option_index].name) == 0) {
         if (!project_output_set) {
-          strcpy(project_output_path, optarg);
+          snprintf(project_output_path, sizeof(mb_path), "%s", optarg);
           project_output_set = true;
         }
         else {
           fprintf(stderr, "Output project already set:\n\t%s\nProject %s ignored\n\n", project_output_path, optarg);
+        }
+      }
+
+      /* create-project */
+      else if (strcmp("create-project", options[option_index].name) == 0) {
+        if (!project_create_set) {
+          snprintf(project_create_path, sizeof(mb_path), "%s", optarg);
+          project_create_set = true;
+        }
+        else {
+          fprintf(stderr, "Project to create already set:\n\t%s\nProject %s ignored\n\n", project_create_path, optarg);
+        }
+      }
+
+      /*-------------------------------------------------------
+       * project settings - applied to the output project once loaded/created */
+      else if (strcmp("section-length", options[option_index].name) == 0) {
+        if (sscanf(optarg, "%lf", &set_section_length) == 1)
+          settings_mask |= MBNA_SETTINGS_SECTION_LENGTH;
+        else
+          fprintf(stderr, "Failure to parse --section-length=%s\n\n", optarg);
+      }
+      else if (strcmp("section-soundings", options[option_index].name) == 0) {
+        if (sscanf(optarg, "%d", &set_section_soundings) == 1)
+          settings_mask |= MBNA_SETTINGS_SECTION_SOUNDINGS;
+        else
+          fprintf(stderr, "Failure to parse --section-soundings=%s\n\n", optarg);
+      }
+      else if (strcmp("contour-interval", options[option_index].name) == 0) {
+        if (sscanf(optarg, "%lf", &set_cont_int) == 1)
+          settings_mask |= MBNA_SETTINGS_CONT_INT;
+        else
+          fprintf(stderr, "Failure to parse --contour-interval=%s\n\n", optarg);
+      }
+      else if (strcmp("color-interval", options[option_index].name) == 0) {
+        if (sscanf(optarg, "%lf", &set_col_int) == 1)
+          settings_mask |= MBNA_SETTINGS_COL_INT;
+        else
+          fprintf(stderr, "Failure to parse --color-interval=%s\n\n", optarg);
+      }
+      else if (strcmp("tick-interval", options[option_index].name) == 0) {
+        if (sscanf(optarg, "%lf", &set_tick_int) == 1)
+          settings_mask |= MBNA_SETTINGS_TICK_INT;
+        else
+          fprintf(stderr, "Failure to parse --tick-interval=%s\n\n", optarg);
+      }
+      else if (strcmp("label-interval", options[option_index].name) == 0) {
+        if (sscanf(optarg, "%lf", &set_label_int) == 1)
+          settings_mask |= MBNA_SETTINGS_LABEL_INT;
+        else
+          fprintf(stderr, "Failure to parse --label-interval=%s\n\n", optarg);
+      }
+      else if (strcmp("decimation", options[option_index].name) == 0) {
+        if (sscanf(optarg, "%d", &set_decimation) == 1)
+          settings_mask |= MBNA_SETTINGS_DECIMATION;
+        else
+          fprintf(stderr, "Failure to parse --decimation=%s\n\n", optarg);
+      }
+      else if (strcmp("smoothing", options[option_index].name) == 0) {
+        if (sscanf(optarg, "%lf", &set_smoothing) == 1)
+          settings_mask |= MBNA_SETTINGS_SMOOTHING;
+        else
+          fprintf(stderr, "Failure to parse --smoothing=%s\n\n", optarg);
+      }
+      else if (strcmp("zoffsetwidth", options[option_index].name) == 0) {
+        if (sscanf(optarg, "%lf", &set_zoffsetwidth) == 1)
+          settings_mask |= MBNA_SETTINGS_ZOFFSETWIDTH;
+        else
+          fprintf(stderr, "Failure to parse --zoffsetwidth=%s\n\n", optarg);
+      }
+
+      /*-------------------------------------------------------
+       * import swath data (single file or datalist) into the project
+          --import=path              (path treated as a datalist)
+          --import=path:format       (path treated as a single file of the given mbio format)
+          --import-as-survey=...     (same, but forces all imported files into one new survey) */
+      else if (strcmp("import", options[option_index].name) == 0
+                || strcmp("import-as-survey", options[option_index].name) == 0) {
+        if (num_mods < NUMBER_MODS_MAX) {
+          mods[num_mods].mode = MOD_MODE_IMPORT_DATA;
+          mods[num_mods].flag1 = (strcmp("import-as-survey", options[option_index].name) == 0);
+          char *colon = strrchr(optarg, ':');
+          if (colon != NULL && sscanf(colon + 1, "%d", &mods[num_mods].format1) == 1) {
+            snprintf(mods[num_mods].path1, sizeof(mb_path), "%.*s", (int)(colon - optarg), optarg);
+          }
+          else {
+            snprintf(mods[num_mods].path1, sizeof(mb_path), "%s", optarg);
+            mods[num_mods].format1 = -1;
+          }
+          num_mods++;
+        }
+        else {
+          fprintf(stderr, "Maximum number of mod commands reached:\n\t--import=%s command ignored\n\n", optarg);
+        }
+      }
+
+      /*-------------------------------------------------------
+       * detect new crossings between previously loaded/imported files */
+      else if (strcmp("find-crossings", options[option_index].name) == 0) {
+        if (num_mods < NUMBER_MODS_MAX) {
+          mods[num_mods].mode = MOD_MODE_FIND_CROSSINGS;
+          num_mods++;
+        }
+        else {
+          fprintf(stderr, "Maximum number of mod commands reached:\n\t--find-crossings command ignored\n\n");
+        }
+      }
+
+      /*-------------------------------------------------------
+       * autopick ties at unanalyzed crossings
+          --autopick / --autopick-horizontal run the pick; the
+          --autopick-crossing-type/--autopick-scope/--autopick-survey[2]/
+          --autopick-file/--autopick-section/--autopick-overlap-threshold
+          flags narrow which crossings are considered and may appear in
+          any order relative to --autopick[-horizontal] */
+      else if (strcmp("autopick", options[option_index].name) == 0
+                || strcmp("autopick-horizontal", options[option_index].name) == 0) {
+        if (num_mods < NUMBER_MODS_MAX) {
+          mods[num_mods].mode = MOD_MODE_AUTOPICK;
+          mods[num_mods].flag1 = (strcmp("autopick", options[option_index].name) == 0);
+          num_mods++;
+        }
+        else {
+          fprintf(stderr, "Maximum number of mod commands reached:\n\t--%s command ignored\n\n",
+                  options[option_index].name);
+        }
+      }
+      else if (strcmp("autopick-crossing-type", options[option_index].name) == 0) {
+        if (strcmp(optarg, "all") == 0)
+          autopick_crossing_type = MBNA_VIEW_LIST_CROSSINGS;
+        else if (strcmp(optarg, "mediocre") == 0)
+          autopick_crossing_type = MBNA_VIEW_LIST_MEDIOCRECROSSINGS;
+        else if (strcmp(optarg, "good") == 0)
+          autopick_crossing_type = MBNA_VIEW_LIST_GOODCROSSINGS;
+        else if (strcmp(optarg, "better") == 0)
+          autopick_crossing_type = MBNA_VIEW_LIST_BETTERCROSSINGS;
+        else if (strcmp(optarg, "true") == 0)
+          autopick_crossing_type = MBNA_VIEW_LIST_TRUECROSSINGS;
+        else
+          fprintf(stderr, "Unrecognized --autopick-crossing-type=%s (expect all|mediocre|good|better|true)\n\n", optarg);
+      }
+      else if (strcmp("autopick-scope", options[option_index].name) == 0) {
+        if (strcmp(optarg, "all") == 0)
+          autopick_scope_mode = MBNA_VIEW_MODE_ALL;
+        else if (strcmp(optarg, "survey") == 0)
+          autopick_scope_mode = MBNA_VIEW_MODE_SURVEY;
+        else if (strcmp(optarg, "withsurvey") == 0)
+          autopick_scope_mode = MBNA_VIEW_MODE_WITHSURVEY;
+        else if (strcmp(optarg, "block") == 0)
+          autopick_scope_mode = MBNA_VIEW_MODE_BLOCK;
+        else if (strcmp(optarg, "file") == 0)
+          autopick_scope_mode = MBNA_VIEW_MODE_FILE;
+        else if (strcmp(optarg, "withfile") == 0)
+          autopick_scope_mode = MBNA_VIEW_MODE_WITHFILE;
+        else if (strcmp(optarg, "withsection") == 0)
+          autopick_scope_mode = MBNA_VIEW_MODE_WITHSECTION;
+        else
+          fprintf(stderr,
+                  "Unrecognized --autopick-scope=%s (expect all|survey|withsurvey|block|file|withfile|withsection)\n\n",
+                  optarg);
+      }
+      else if (strcmp("autopick-survey", options[option_index].name) == 0) {
+        if (sscanf(optarg, "%d", &autopick_survey_select) == 1)
+          autopick_survey_select1 = autopick_survey_select;
+        else
+          fprintf(stderr, "Failure to parse --autopick-survey=%s\n\n", optarg);
+      }
+      else if (strcmp("autopick-survey2", options[option_index].name) == 0) {
+        if (sscanf(optarg, "%d", &autopick_survey_select2) != 1)
+          fprintf(stderr, "Failure to parse --autopick-survey2=%s\n\n", optarg);
+      }
+      else if (strcmp("autopick-file", options[option_index].name) == 0) {
+        if (sscanf(optarg, "%d", &autopick_file_select) != 1)
+          fprintf(stderr, "Failure to parse --autopick-file=%s\n\n", optarg);
+      }
+      else if (strcmp("autopick-section", options[option_index].name) == 0) {
+        if (sscanf(optarg, "%d", &autopick_section_select) != 1)
+          fprintf(stderr, "Failure to parse --autopick-section=%s\n\n", optarg);
+      }
+      else if (strcmp("autopick-overlap-threshold", options[option_index].name) == 0) {
+        if (sscanf(optarg, "%lf", &autopick_overlap_threshold) != 1)
+          fprintf(stderr, "Failure to parse --autopick-overlap-threshold=%s\n\n", optarg);
+      }
+
+      /*-------------------------------------------------------
+       * invert the tie/crossing network for a corrected navigation model */
+      else if (strcmp("invert-navigation", options[option_index].name) == 0) {
+        if (num_mods < NUMBER_MODS_MAX) {
+          mods[num_mods].mode = MOD_MODE_INVERT_NAVIGATION;
+          num_mods++;
+        }
+        else {
+          fprintf(stderr, "Maximum number of mod commands reached:\n\t--invert-navigation command ignored\n\n");
+        }
+      }
+
+      /*-------------------------------------------------------
+       * regenerate the project's reference bathymetry grids */
+      else if (strcmp("update-grids", options[option_index].name) == 0) {
+        if (num_mods < NUMBER_MODS_MAX) {
+          mods[num_mods].mode = MOD_MODE_UPDATE_GRIDS;
+          num_mods++;
+        }
+        else {
+          fprintf(stderr, "Maximum number of mod commands reached:\n\t--update-grids command ignored\n\n");
+        }
+      }
+
+      /*-------------------------------------------------------
+       * apply the current navigation solution to the swath data files */
+      else if (strcmp("apply-navigation", options[option_index].name) == 0) {
+        if (num_mods < NUMBER_MODS_MAX) {
+          mods[num_mods].mode = MOD_MODE_APPLY_NAVIGATION;
+          num_mods++;
+        }
+        else {
+          fprintf(stderr, "Maximum number of mod commands reached:\n\t--apply-navigation command ignored\n\n");
         }
       }
 
@@ -1326,41 +1629,42 @@ int main(int argc, char **argv) {
       }
 
       /*-------------------------------------------------------
-       * Reimport file (or survey or all files)
-          --reimport-file=file
-          --reimport-survey=survey
-          --reimport-all-files */
-      else if (strcmp("reimport-file", options[option_index].name) == 0) {
+       * Update beam flags for a file (or survey or all files) to match
+          the current processed version of the swath data
+          --update-file=file
+          --update-survey=survey
+          --update-all-files */
+      else if (strcmp("update-file", options[option_index].name) == 0) {
         if (num_mods < NUMBER_MODS_MAX) {
           int nscan;
           if ((nscan = sscanf(optarg, "%d", &mods[num_mods].file1)) == 1) {
-            mods[num_mods].mode = MOD_MODE_REIMPORT_FILE;
+            mods[num_mods].mode = MOD_MODE_UPDATE_FILE;
             num_mods++;
           }
         }
         else {
-          fprintf(stderr, "Maximum number of mod commands reached:\n\tskip-unset-crossings command ignored\n\n");
+          fprintf(stderr, "Maximum number of mod commands reached:\n\tupdate-file command ignored\n\n");
         }
       }
-      else if (strcmp("reimport-survey", options[option_index].name) == 0) {
+      else if (strcmp("update-survey", options[option_index].name) == 0) {
         if (num_mods < NUMBER_MODS_MAX) {
           int nscan;
           if ((nscan = sscanf(optarg, "%d", &mods[num_mods].file1)) == 1) {
-            mods[num_mods].mode = MOD_MODE_REIMPORT_SURVEY;
+            mods[num_mods].mode = MOD_MODE_UPDATE_SURVEY;
             num_mods++;
           }
         }
         else {
-          fprintf(stderr, "Maximum number of mod commands reached:\n\tskip-unset-crossings command ignored\n\n");
+          fprintf(stderr, "Maximum number of mod commands reached:\n\tupdate-survey command ignored\n\n");
         }
       }
-      else if (strcmp("reimport-all-files", options[option_index].name) == 0) {
+      else if (strcmp("update-all-files", options[option_index].name) == 0) {
         if (num_mods < NUMBER_MODS_MAX) {
-          mods[num_mods].mode = MOD_MODE_REIMPORT_ALL_FILES;
+          mods[num_mods].mode = MOD_MODE_UPDATE_ALL_FILES;
           num_mods++;
         }
         else {
-          fprintf(stderr, "Maximum number of mod commands reached:\n\tskip-unset-crossings command ignored\n\n");
+          fprintf(stderr, "Maximum number of mod commands reached:\n\tupdate-all-files command ignored\n\n");
         }
       }
 
@@ -1369,11 +1673,11 @@ int main(int argc, char **argv) {
           --import-tie-list=file
           --export-tie-list=file */
       else if (strcmp("import-tie-list", options[option_index].name) == 0) {
-        strcpy(import_tie_list_path, optarg);
+        snprintf(import_tie_list_path, sizeof(mb_path), "%s", optarg);
         import_tie_list_set = true;
       }
       else if (strcmp("export-tie-list", options[option_index].name) == 0) {
-        strcpy(export_tie_list_path, optarg);
+        snprintf(export_tie_list_path, sizeof(mb_path), "%s", optarg);
         export_tie_list_set = true;
       }
 
@@ -1594,7 +1898,12 @@ int main(int argc, char **argv) {
   }
 
   /* figure out mbnavadjust project merge mode */
-  if (!project_inputbase_set) {
+  if (project_create_set && (project_inputbase_set || project_inputadd_set)) {
+    fprintf(stderr, "--create-project cannot be combined with --input.\n");
+    fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
+    exit(MB_ERROR_BAD_USAGE);
+  }
+  if (!project_create_set && !project_inputbase_set) {
     fprintf(stderr, "No input base project has been set.\n");
     fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
     exit(MB_ERROR_BAD_USAGE);
@@ -1603,7 +1912,12 @@ int main(int argc, char **argv) {
   int mbnavadjustmerge_mode = MBNAVADJUSTMERGE_MODE_NONE;
   bool update_datalist = false;
 
-  if (project_inputbase_set && !project_inputadd_set && !project_output_set) {
+  if (project_create_set) {
+    strcpy(project_output_path, project_create_path);
+    project_output_set = true;
+    mbnavadjustmerge_mode = MBNAVADJUSTMERGE_MODE_CREATE;
+  }
+  else if (project_inputbase_set && !project_inputadd_set && !project_output_set) {
     strcpy(project_output_path, project_inputbase_path);
     bool triangulate_only = false;
     if (triangulate != TRIANGULATE_NONE && !import_tie_list_set) {
@@ -1915,6 +2229,31 @@ int main(int argc, char **argv) {
     }
   }
 
+  /* else creating a brand new project from scratch */
+  else if (mbnavadjustmerge_mode == MBNAVADJUSTMERGE_MODE_CREATE) {
+    status = mbnavadjust_new_project(verbose, project_output_path, set_section_length, set_section_soundings,
+                                     set_cont_int, set_col_int, set_tick_int, set_label_int, set_decimation,
+                                     set_smoothing, set_zoffsetwidth, &project_output, &error);
+    if (status == MB_SUCCESS) {
+      fprintf(stderr, "\nCreated new project:\n\t%s\n", project_output_path);
+    }
+    else {
+      fprintf(stderr, "Creation failure for new project:\n\t%s\n", project_output_path);
+      fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
+      error = MB_ERROR_BAD_USAGE;
+      exit(error);
+    }
+  }
+
+  /* apply any project settings changes before importing data or checking for
+      crossings, since section splitting during import depends on section_length
+      and section_soundings */
+  if (settings_mask != 0) {
+    mbnavadjust_apply_settings(verbose, &project_output, settings_mask, set_section_length, set_section_soundings,
+                               set_cont_int, set_col_int, set_tick_int, set_label_int, set_decimation, set_smoothing,
+                               set_zoffsetwidth, &error);
+  }
+
   /* if adding or merging projects read the input add project
       then add the input add project to the output project */
   if (mbnavadjustmerge_mode == MBNAVADJUSTMERGE_MODE_ADD || mbnavadjustmerge_mode == MBNAVADJUSTMERGE_MODE_MERGE) {
@@ -1976,7 +2315,9 @@ int main(int argc, char **argv) {
       for (int k = 0; k < project_output.files[j].num_sections; k++) {
         project_output.files[j].sections[k].global_start_ping += project_output.num_pings;
         project_output.files[j].sections[k].global_start_snav += project_output.num_snavs;
-        project_output.files[j].sections[k].globaltie.refgrid_id += project_output.num_refgrids;
+        if (project_output.files[j].sections[k].globaltie.refgrid_id >= 0) {
+          project_output.files[j].sections[k].globaltie.refgrid_id += project_output.num_refgrids;
+        }
       }
     }
 
@@ -2593,39 +2934,105 @@ int main(int argc, char **argv) {
         }
       }
 
-      /* if the crossing does not exist, create it */
+      /* if the crossing does not exist, create it - but only if the
+          file/section references are actually valid */
       if (!found_crossing) {
-        /* allocate mbna_crossing array if needed */
-        if (project_output.num_crossings_alloc <= project_output.num_crossings) {
-          project_output.crossings = (struct mbna_crossing *)realloc(
-              project_output.crossings,
-              sizeof(struct mbna_crossing) * (project_output.num_crossings_alloc + ALLOC_NUM));
-          if (project_output.crossings != NULL)
-            project_output.num_crossings_alloc += ALLOC_NUM;
-          else {
-            status = MB_FAILURE;
-            error = MB_ERROR_MEMORY_FAIL;
+        if (mods[imod].file1 >= 0 && mods[imod].file1 < project_output.num_files &&
+            mods[imod].file2 >= 0 && mods[imod].file2 < project_output.num_files &&
+            mods[imod].section1 >= 0 && mods[imod].section1 < project_output.files[mods[imod].file1].num_sections &&
+            mods[imod].section2 >= 0 && mods[imod].section2 < project_output.files[mods[imod].file2].num_sections) {
+          /* allocate mbna_crossing array if needed */
+          if (project_output.num_crossings_alloc <= project_output.num_crossings) {
+            project_output.crossings = (struct mbna_crossing *)realloc(
+                project_output.crossings,
+                sizeof(struct mbna_crossing) * (project_output.num_crossings_alloc + ALLOC_NUM));
+            if (project_output.crossings != NULL)
+              project_output.num_crossings_alloc += ALLOC_NUM;
+            else {
+              status = MB_FAILURE;
+              error = MB_ERROR_MEMORY_FAIL;
+            }
+          }
+
+          if (status == MB_SUCCESS) {
+            /* add crossing to list */
+            crossing = (struct mbna_crossing *)&project_output.crossings[project_output.num_crossings];
+            crossing->status = MBNA_CROSSING_STATUS_NONE;
+            crossing->truecrossing = false;
+            crossing->overlap = 0;
+            crossing->file_id_1 = mods[imod].file1;
+            crossing->section_1 = mods[imod].section1;
+            crossing->file_id_2 = mods[imod].file2;
+            crossing->section_2 = mods[imod].section2;
+            crossing->num_ties = 0;
+            current_crossing = project_output.num_crossings;
+            project_output.num_crossings++;
+
+            /* only look up file1/file2 (for the block numbers in the message
+                below) after crossing->file_id_1/2 have actually been assigned */
+            file1 = (struct mbna_file *)&project_output.files[crossing->file_id_1];
+            file2 = (struct mbna_file *)&project_output.files[crossing->file_id_2];
+            fprintf(stderr, "Added crossing: %d  %2.2d:%4.4d:%4.4d   %2.2d:%4.4d:%4.4d\n", current_crossing, file1->block,
+                    crossing->file_id_1, crossing->section_1, file2->block, crossing->file_id_2, crossing->section_2);
           }
         }
-
-        /* add crossing to list */
-        crossing = (struct mbna_crossing *)&project_output.crossings[project_output.num_crossings];
-        file1 = (struct mbna_file *)&project_output.files[crossing->file_id_1];
-        file2 = (struct mbna_file *)&project_output.files[crossing->file_id_2];
-        crossing->status = MBNA_CROSSING_STATUS_NONE;
-        crossing->truecrossing = false;
-        crossing->overlap = 0;
-        crossing->file_id_1 = mods[imod].file1;
-        crossing->section_1 = mods[imod].section1;
-        crossing->file_id_2 = mods[imod].file2;
-        crossing->section_2 = mods[imod].section2;
-        crossing->num_ties = 0;
-        current_crossing = project_output.num_crossings;
-        project_output.num_crossings++;
-
-        fprintf(stderr, "Added crossing: %d  %2.2d:%4.4d:%4.4d   %2.2d:%4.4d:%4.4d\n", current_crossing, file1->block,
-                crossing->file_id_1, crossing->section_1, file2->block, crossing->file_id_2, crossing->section_2);
+        else {
+          fprintf(stderr, "Invalid add-crossing=%4.4d:%4.4d/%4.4d:%4.4d - file/section out of range, crossing not added\n",
+                  mods[imod].file1, mods[imod].section1, mods[imod].file2, mods[imod].section2);
+        }
       }
+      break;
+
+    case MOD_MODE_IMPORT_DATA:
+      fprintf(stderr, "\nCommand import%s=%s%s%d\n", mods[imod].flag1 ? "-as-survey" : "", mods[imod].path1,
+              mods[imod].format1 >= 0 ? ":" : " (format:", mods[imod].format1);
+      status = mbnavadjust_import_data(verbose, &project_output, mods[imod].path1, mods[imod].format1,
+                                       mods[imod].flag1, &error);
+      if (status == MB_SUCCESS) {
+        fprintf(stderr, "Import succeeded:\n\t%s\n\t%d files total\n", mods[imod].path1, project_output.num_files);
+      }
+      else {
+        fprintf(stderr, "Import failed:\n\t%s\n", mods[imod].path1);
+      }
+      break;
+
+    case MOD_MODE_FIND_CROSSINGS:
+      fprintf(stderr, "\nCommand find-crossings\n");
+      status = mbnavadjust_findcrossings(verbose, &project_output, &error);
+      fprintf(stderr, "Found crossings:\n\t%d crossings\n\t%d true crossings\n", project_output.num_crossings,
+              project_output.num_truecrossings);
+      break;
+
+    case MOD_MODE_AUTOPICK:
+      fprintf(stderr, "\nCommand autopick%s crossing-type:%d scope:%d survey:%d survey2:%d file:%d section:%d "
+              "overlap-threshold:%.1f\n",
+              mods[imod].flag1 ? "" : "-horizontal", autopick_crossing_type, autopick_scope_mode,
+              autopick_survey_select, autopick_survey_select2, autopick_file_select, autopick_section_select,
+              autopick_overlap_threshold);
+      status = mbnavadjust_autopick(verbose, &project_output, autopick_crossing_type, autopick_scope_mode,
+                                    autopick_survey_select, autopick_survey_select1, autopick_survey_select2,
+                                    autopick_file_select, autopick_section_select, autopick_overlap_threshold,
+                                    mods[imod].flag1, NULL, &error);
+      fprintf(stderr, "Autopick complete:\n\t%d crossings\n\t%d ties\n", project_output.num_crossings,
+              project_output.num_ties);
+      break;
+
+    case MOD_MODE_INVERT_NAVIGATION:
+      fprintf(stderr, "\nCommand invert-navigation\n");
+      status = mbnavadjust_invertnav(verbose, &project_output);
+      fprintf(stderr, "Inversion complete:\n\tinversion status:%d\n", project_output.inversion_status);
+      break;
+
+    case MOD_MODE_UPDATE_GRIDS:
+      fprintf(stderr, "\nCommand update-grids\n");
+      status = mbnavadjust_updategrid(verbose, &project_output);
+      fprintf(stderr, "Grid update complete:\n\tgrid status:%d\n", project_output.grid_status);
+      break;
+
+    case MOD_MODE_APPLY_NAVIGATION:
+      fprintf(stderr, "\nCommand apply-navigation\n");
+      status = mbnavadjust_applynav(verbose, &project_output);
+      fprintf(stderr, "Navigation applied.\n");
       break;
 
     case MOD_MODE_SET_TIE_VALUES_ALL:
@@ -2676,29 +3083,35 @@ int main(int argc, char **argv) {
           }
         }
 
-        /* add crossing to list */
-        current_crossing = project_output.num_crossings;
-        crossing = (struct mbna_crossing *)&project_output.crossings[current_crossing];
-        file1 = (struct mbna_file *)&project_output.files[crossing->file_id_1];
-        file2 = (struct mbna_file *)&project_output.files[crossing->file_id_2];
-        crossing->status = MBNA_CROSSING_STATUS_NONE;
-        crossing->truecrossing = false;
-        crossing->overlap = 0;
-        crossing->file_id_1 = mods[imod].file1;
-        crossing->section_1 = mods[imod].section1;
-        crossing->file_id_2 = mods[imod].file2;
-        crossing->section_2 = mods[imod].section2;
-        crossing->num_ties = 0;
-        current_crossing = project_output.num_crossings;
-        project_output.num_crossings++;
+        /* add crossing to list - but only if the array growth above (if
+            any was needed) actually succeeded */
+        if (status == MB_SUCCESS) {
+          current_crossing = project_output.num_crossings;
+          crossing = (struct mbna_crossing *)&project_output.crossings[current_crossing];
+          crossing->status = MBNA_CROSSING_STATUS_NONE;
+          crossing->truecrossing = false;
+          crossing->overlap = 0;
+          crossing->file_id_1 = mods[imod].file1;
+          crossing->section_1 = mods[imod].section1;
+          crossing->file_id_2 = mods[imod].file2;
+          crossing->section_2 = mods[imod].section2;
+          crossing->num_ties = 0;
+          current_crossing = project_output.num_crossings;
+          project_output.num_crossings++;
 
-        fprintf(stderr, "Added crossing: %d  %2.2d:%4.4d:%4.4d   %2.2d:%4.4d:%4.4d\n", current_crossing, file1->block,
-                crossing->file_id_1, crossing->section_1, file2->block, crossing->file_id_2, crossing->section_2);
+          /* only look up file1/file2 (for the block numbers in the message
+              below) after crossing->file_id_1/2 have actually been assigned */
+          file1 = (struct mbna_file *)&project_output.files[crossing->file_id_1];
+          file2 = (struct mbna_file *)&project_output.files[crossing->file_id_2];
+          fprintf(stderr, "Added crossing: %d  %2.2d:%4.4d:%4.4d   %2.2d:%4.4d:%4.4d\n", current_crossing, file1->block,
+                  crossing->file_id_1, crossing->section_1, file2->block, crossing->file_id_2, crossing->section_2);
+        }
       }
 
-      /* if the tie does not exist, create it */
+      /* if the tie does not exist, create it - guard against a prior
+          allocation failure above having left crossing unset/stale */
       bool existing_tie = true;
-      if (crossing->num_ties == 0) {
+      if (status == MB_SUCCESS && crossing->num_ties == 0) {
 
         existing_tie = false;
 
@@ -3583,10 +3996,15 @@ int main(int argc, char **argv) {
     case MOD_MODE_MERGE_SURVEYS:
       fprintf(stderr, "\nCommand merge-surveys=%2.2d/%2.2d\n", mods[imod].survey1, mods[imod].survey2);
 
-      if (mods[imod].survey1 >= 0 && mods[imod].survey1 < project_output.num_surveys
-          && mods[imod].survey2 >= 0 && mods[imod].survey2 < project_output.num_surveys
+      /* this command actually merges two adjacent BLOCKS (file1->block),
+          not surveys - a single survey can span multiple blocks when it
+          contains internal navigation discontinuities, so num_blocks can
+          exceed num_surveys and is the counter that must be validated
+          against and decremented here, not num_surveys */
+      if (mods[imod].survey1 >= 0 && mods[imod].survey1 < project_output.num_blocks
+          && mods[imod].survey2 >= 0 && mods[imod].survey2 < project_output.num_blocks
           && mods[imod].survey2 == mods[imod].survey1 + 1) {
-        // loop over files,resetting block id for all files with blocks (surveys) >= survey2 to be one less
+        // loop over files, resetting block id for all files with blocks >= survey2 to be one less
         for (int ifile=0; ifile < project_output.num_files; ifile++) {
           file1 = &(project_output.files[ifile]);
           if (file1->block > mods[imod].survey1) {
@@ -3594,46 +4012,46 @@ int main(int argc, char **argv) {
               file1->sections[0].continuity = true;
             }
             file1->block--;
-            fprintf(stderr, "Reset file %d to be in survey %d instead of %d\n", ifile, file1->block, file1->block +1);
+            fprintf(stderr, "Reset file %d to be in block %d instead of %d\n", ifile, file1->block, file1->block +1);
           }
         }
-        project_output.num_surveys--;
+        project_output.num_blocks--;
       }
       break;
 
-    case MOD_MODE_REIMPORT_FILE:
-      fprintf(stderr, "\nCommand reimport-file=%2.2d\n", mods[imod].file1);
-      status = mbnavadjust_reimport_file(verbose, &project_output, mods[imod].file1, &error);
+    case MOD_MODE_UPDATE_FILE:
+      fprintf(stderr, "\nCommand update-file=%2.2d\n", mods[imod].file1);
+      status = mbnavadjust_update_file(verbose, &project_output, mods[imod].file1, &error);
       break;
-    
-    case MOD_MODE_REIMPORT_SURVEY:
-      fprintf(stderr, "\nCommand reimport-survey=%2.2d\n", mods[imod].file1);
+
+    case MOD_MODE_UPDATE_SURVEY:
+      fprintf(stderr, "\nCommand update-survey=%2.2d\n", mods[imod].file1);
       for (int ifile = 0; ifile < project_output.num_files; ifile++) {
         struct mbna_file *file = &project_output.files[ifile];
         if (file->block == mods[imod].file1) {
-		  status = mbnavadjust_reimport_file(verbose, &project_output, ifile, &error);
+		  status = mbnavadjust_update_file(verbose, &project_output, ifile, &error);
 		  if (status == MB_SUCCESS) {
-			fprintf(stderr, "Reimported file %d of %d: %s\n", 
+			fprintf(stderr, "Updated beam flags for file %d of %d: %s\n",
 					  ifile, project_output.num_files, project_output.files[ifile].file);
 		  }
 		  else {
-			fprintf(stderr, "**FAILED to reimport file %d of %d: %s\n", 
+			fprintf(stderr, "**FAILED to update beam flags for file %d of %d: %s\n",
 					  ifile, project_output.num_files, project_output.files[ifile].file);
 		  }
 	    }
       }
       break;
-    
-    case MOD_MODE_REIMPORT_ALL_FILES:
-      fprintf(stderr, "\nCommand reimport-all-files\n");
+
+    case MOD_MODE_UPDATE_ALL_FILES:
+      fprintf(stderr, "\nCommand update-all-files\n");
       for (int ifile = 0; ifile < project_output.num_files; ifile++) {
-        status = mbnavadjust_reimport_file(verbose, &project_output, ifile, &error);
+        status = mbnavadjust_update_file(verbose, &project_output, ifile, &error);
         if (status == MB_SUCCESS) {
-          fprintf(stderr, "Reimported file %d of %d: %s\n", 
+          fprintf(stderr, "Updated beam flags for file %d of %d: %s\n",
           			ifile, project_output.num_files, project_output.files[ifile].file);
         }
         else {
-          fprintf(stderr, "**FAILED to reimport file %d of %d: %s\n", 
+          fprintf(stderr, "**FAILED to update beam flags for file %d of %d: %s\n",
           			ifile, project_output.num_files, project_output.files[ifile].file);
         }
       }
@@ -4193,31 +4611,37 @@ int main(int argc, char **argv) {
               }
             }
 
-            /* add crossing to list */
-            current_crossing = project_output.num_crossings;
-            crossing = (struct mbna_crossing *)&project_output.crossings[current_crossing];
-            file1 = (struct mbna_file *)&project_output.files[crossing->file_id_1];
-            file2 = (struct mbna_file *)&project_output.files[crossing->file_id_2];
-            crossing->status = MBNA_CROSSING_STATUS_NONE;
-            crossing->truecrossing = false;
-            crossing->overlap = 0;
-            crossing->file_id_1 = import_tie_file_1;
-            crossing->section_1 = import_tie_section_1_id;
-            crossing->file_id_2 = import_tie_file_2;
-            crossing->section_2 = import_tie_section_2_id;
-            crossing->num_ties = 0;
-            current_crossing = project_output.num_crossings;
-            project_output.num_crossings++;
+            /* add crossing to list - but only if the array growth above
+                (if any was needed) actually succeeded */
+            if (status == MB_SUCCESS) {
+              current_crossing = project_output.num_crossings;
+              crossing = (struct mbna_crossing *)&project_output.crossings[current_crossing];
+              crossing->status = MBNA_CROSSING_STATUS_NONE;
+              crossing->truecrossing = false;
+              crossing->overlap = 0;
+              crossing->file_id_1 = import_tie_file_1;
+              crossing->section_1 = import_tie_section_1_id;
+              crossing->file_id_2 = import_tie_file_2;
+              crossing->section_2 = import_tie_section_2_id;
+              crossing->num_ties = 0;
+              current_crossing = project_output.num_crossings;
+              project_output.num_crossings++;
 
-            fprintf(stderr, "Added crossing: %d  %2.2d:%4.4d:%4.4d   %2.2d:%4.4d:%4.4d\n", current_crossing,
-                    file1->block, crossing->file_id_1, crossing->section_1, file2->block, crossing->file_id_2,
-                    crossing->section_2);
+              /* only look up file1/file2 (for the block numbers in the
+                  message below) after crossing->file_id_1/2 have actually
+                  been assigned */
+              file1 = (struct mbna_file *)&project_output.files[crossing->file_id_1];
+              file2 = (struct mbna_file *)&project_output.files[crossing->file_id_2];
+              fprintf(stderr, "Added crossing: %d  %2.2d:%4.4d:%4.4d   %2.2d:%4.4d:%4.4d\n", current_crossing,
+                      file1->block, crossing->file_id_1, crossing->section_1, file2->block, crossing->file_id_2,
+                      crossing->section_2);
+            }
           }
 
           /* check if this tie already exists */
           found = false;
           int itie = 0; // Used after for
-          if (crossing->num_ties > 0) {
+          if (status == MB_SUCCESS && crossing->num_ties > 0) {
             for (; itie < crossing->num_ties; itie++) {
               tie = &crossing->ties[itie];
               if (tie->snav_1 == import_tie_snav_1 && tie->snav_2 == import_tie_snav_2) {

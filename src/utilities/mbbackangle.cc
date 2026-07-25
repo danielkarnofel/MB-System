@@ -91,10 +91,28 @@ constexpr char help_message[] =
     "  average function for a user defined number of pings. The tables\n"
     "  are output to a \".aga\" and \".sga\" files that can be applied\n"
     "  by MBprocess.";
-constexpr char usage_message[] =
+constexpr char usage_message_old[] =
     "mbbackangle -Ifile "
     "[-Akind -Bmode[/beamwidth/depression] -Fformat -Ggridmode/angle/min/max/n_columns/n_rows "
     "-Nnangles/angle_max -Ppings -Q -Rrefangle -S -Ttopogridfile -Zaltitude -V -H]";
+constexpr char usage_message[] =
+    "mbbackangle\n"
+    "\t--altitude=altitude {-Zaltitude}\n"
+    "\t--angle-bins=nangles/angle_max {-Nnangles/angle_max}\n"
+    "\t--beam-pattern-mode=mode[/beamwidth/depression] {-Bmode[/beamwidth/depression]}\n"
+    "\t--data-kind=kind {-Akind}\n"
+    "\t--dump-output {-D}\n"
+    "\t--format=format {-Fformat}\n"
+    "\t--help {-H}\n"
+    "\t--input=file {-Ifile}\n"
+    "\t--output-grid=gridmode/angle/min/max/n_columns/n_rows {-Ggridmode/angle/min/max/n_columns/n_rows}\n"
+    "\t--pings-average=pings {-Ppings}\n"
+    "\t--reference-angle=refangle {-Rrefangle}\n"
+    "\t--skip-existing {-S}\n"
+    "\t--slope-correction {-Q}\n"
+    "\t--symmetric-correction {-C}\n"
+    "\t--topography-grid=topogridfile {-Ttopogridfile}\n"
+    "\t--verbose {-V}\n\n";
 
 /*--------------------------------------------------------------------*/
 int output_table(int verbose, FILE *tfp, int ntable, int nping, double time_d, int nangles, double angle_max, double dangle,
@@ -325,13 +343,127 @@ int main(int argc, char **argv) {
   status = mb_user_host_date(verbose, user, host, date, &error);
 
 	{
+		static struct option options[] = {{"data-kind", required_argument, nullptr, 0},
+		                                  {"beam-pattern-mode", required_argument, nullptr, 0},
+		                                  {"symmetric-correction", no_argument, nullptr, 0},
+		                                  {"dump-output", no_argument, nullptr, 0},
+		                                  {"format", required_argument, nullptr, 0},
+		                                  {"output-grid", required_argument, nullptr, 0},
+		                                  {"help", no_argument, nullptr, 0},
+		                                  {"input", required_argument, nullptr, 0},
+		                                  {"angle-bins", required_argument, nullptr, 0},
+		                                  {"pings-average", required_argument, nullptr, 0},
+		                                  {"slope-correction", no_argument, nullptr, 0},
+		                                  {"reference-angle", required_argument, nullptr, 0},
+		                                  {"skip-existing", no_argument, nullptr, 0},
+		                                  {"topography-grid", required_argument, nullptr, 0},
+		                                  {"verbose", no_argument, nullptr, 0},
+		                                  {"altitude", required_argument, nullptr, 0},
+		                                  {nullptr, 0, nullptr, 0}};
+
 		bool errflg = false;
 		int c;
+		int option_index;
 		bool help = false;
 
-		while ((c = getopt(argc, argv, "A:a:B:b:CcDdF:f:G:g:HhI:i:N:n:P:p:QqR:r:SsT:t:VvZ:z:")) != -1)
+		while ((c = getopt_long(argc, argv, "A:a:B:b:CcDdF:f:G:g:HhI:i:N:n:P:p:QqR:r:SsT:t:VvZ:z:", options, &option_index)) != -1)
 		{
 			switch (c) {
+			case 0:
+				if (strcmp("data-kind", options[option_index].name) == 0) {
+					int tmp;
+					sscanf(optarg, "%d", &tmp);
+					ampkind = (backangle_kind_t)tmp;
+					if (ampkind == MBBACKANGLE_SS)
+						sidescan_on = true;
+					if (ampkind == MBBACKANGLE_AMP)
+						amplitude_on = true;
+				}
+				else if (strcmp("beam-pattern-mode", options[option_index].name) == 0) {
+					double d1;
+					double d2;
+					int tmp;
+					const int n = sscanf(optarg, "%d/%lf/%lf", &tmp, &d1, &d2);
+					beammode = (beampattern_t)tmp;  // TODO(schwehr): Range check
+					if (beammode == MBBACKANGLE_BEAMPATTERN_SIDESCAN) {
+						if (n >= 2)
+							ssbeamwidth = d1;  // TODO(schwehr): Range check
+						if (n >= 3)
+							ssdepression = d2;  // TODO(schwehr): Range check
+					}
+				}
+				else if (strcmp("symmetric-correction", options[option_index].name) == 0) {
+					symmetry = true;
+					corr_symmetry = MBP_SSCORR_SYMMETRIC;
+				}
+				else if (strcmp("dump-output", options[option_index].name) == 0) {
+					dump = true;
+				}
+				else if (strcmp("format", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &format);
+				}
+				else if (strcmp("output-grid", options[option_index].name) == 0) {
+					int i;
+					int j;
+					int n = sscanf(optarg, "%d/%lf/%lf/%lf/%d/%d", &mode, &angle, &ampmin, &ampmax, &i, &j);
+					if (n == 5) {
+						/* n = */ sscanf(optarg, "%d/%lf/%lf/%d/%d", &mode, &angle, &ampmax, &i, &j);
+						ampmin = 0.0;
+						n = 6;
+					}
+					if (mode == MBBACKANGLE_AMP && n == 6) {
+						gridamp = true;
+						gridampangle = angle;
+						gridampmin = ampmin;
+						gridampmax = ampmax;
+						gridampn_columns = i;
+						gridampn_rows = j;
+						gridampdx = 2.0 * gridampangle / (gridampn_columns - 1);
+						gridampdy = (gridampmax - gridampmin) / (gridampn_rows - 1);
+					}
+					else if (mode == MBBACKANGLE_SS && n == 6) {
+						gridss = true;
+						gridssangle = angle;
+						gridssmin = ampmin;
+						gridssmax = ampmax;
+						gridssn_columns = i;
+						gridssn_rows = j;
+						gridssdx = 2.0 * gridssangle / (gridssn_columns - 1);
+						gridssdy = (gridssmax - gridssmin) / (gridssn_rows - 1);
+					}
+				}
+				else if (strcmp("help", options[option_index].name) == 0) {
+					help = true;
+				}
+				else if (strcmp("input", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", read_file);  // MB_PATH_MAXLINE - 1
+				}
+				else if (strcmp("angle-bins", options[option_index].name) == 0) {
+					sscanf(optarg, "%d/%lf", &nangles, &angle_max);
+				}
+				else if (strcmp("pings-average", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &pings_avg);
+				}
+				else if (strcmp("slope-correction", options[option_index].name) == 0) {
+					corr_slope = true;
+				}
+				else if (strcmp("reference-angle", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf", &ref_angle);
+				}
+				else if (strcmp("skip-existing", options[option_index].name) == 0) {
+					skip_existing = true;
+				}
+				else if (strcmp("topography-grid", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", grid.file);  // MB_PATH_MAXLINE - 1
+					corr_topogrid = true;
+				}
+				else if (strcmp("verbose", options[option_index].name) == 0) {
+					verbose++;
+				}
+				else if (strcmp("altitude", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf", &altitude_default);
+				}
+				break;
 			case 'A':
 			case 'a':
 			{
@@ -914,8 +1046,7 @@ int main(int argc, char **argv) {
       }
       bool output_uptodate = true;
       if (amplitude_on) {
-				strcpy(amptablefile, swathfile);
-				strcat(amptablefile, ".aga");
+				snprintf(amptablefile, sizeof(amptablefile), "%s.aga", swathfile);
 				if (stat(amptablefile, &file_status) == 0 && (file_status.st_mode & S_IFMT) != S_IFDIR) {
 					output_modtime = file_status.st_mtime;
 					output_size = file_status.st_size;
@@ -929,8 +1060,7 @@ int main(int argc, char **argv) {
 				}
 			}
       if (sidescan_on) {
-				strcpy(sstablefile, swathfile);
-				strcat(sstablefile, ".aga");
+				snprintf(sstablefile, sizeof(sstablefile), "%s.aga", swathfile);
 				if (stat(sstablefile, &file_status) == 0 && (file_status.st_mode & S_IFMT) != S_IFDIR) {
 					output_modtime = file_status.st_mtime;
 					output_size = file_status.st_size;
@@ -1087,8 +1217,7 @@ int main(int argc, char **argv) {
 			}
 			else if (error == MB_ERROR_NO_ERROR) {
 				if (amplitude_on) {
-					strcpy(amptablefile, swathfile);
-					strcat(amptablefile, ".aga");
+					snprintf(amptablefile, sizeof(amptablefile), "%s.aga", swathfile);
 					if ((atfp = fopen(amptablefile, "w")) == nullptr) {
 						char *message;
 						mb_error(verbose, error, &message);
@@ -1098,8 +1227,7 @@ int main(int argc, char **argv) {
 					}
 				}
 				if (sidescan_on) {
-					strcpy(sstablefile, swathfile);
-					strcat(sstablefile, ".sga");
+					snprintf(sstablefile, sizeof(sstablefile), "%s.sga", swathfile);
 					if ((stfp = fopen(sstablefile, "w")) == nullptr) {
 						char *message;
 						mb_error(verbose, error, &message);
@@ -1547,8 +1675,7 @@ int main(int argc, char **argv) {
 				}
 
 				/* set the strings */
-				strcpy(gridfile, swathfile);
-				strcat(gridfile, "_aga.grd");
+				snprintf(gridfile, sizeof(gridfile), "%s_aga.grd", swathfile);
 				strcpy(zlabel, "Beam Amplitude PDF (X1000)");
 				strcpy(title, "Beam Amplitude vs. Grazing Angle PDF");
 
@@ -1589,8 +1716,7 @@ int main(int argc, char **argv) {
 				}
 
 				/* set the strings */
-				strcpy(gridfile, swathfile);
-				strcat(gridfile, "_sga.grd");
+				snprintf(gridfile, sizeof(gridfile), "%s_sga.grd", swathfile);
 				strcpy(zlabel, "Sidescan Amplitude PDF (X1000)");
 				strcpy(title, "Sidescan Amplitude vs. Grazing Angle PDF");
 
@@ -1661,8 +1787,7 @@ int main(int argc, char **argv) {
 	time_d_totavg /= ntotavg;
 	altitude_totavg /= ntotavg;
 	if (!dump && amplitude_on) {
-		strcpy(amptablefile, read_file);
-		strcat(amptablefile, "_tot.aga");
+		snprintf(amptablefile, sizeof(amptablefile), "%s_tot.aga", read_file);
 		if ((atfp = fopen(amptablefile, "w")) == nullptr) {
 			error = MB_ERROR_OPEN_FAIL;
 			char *message;
@@ -1694,8 +1819,7 @@ int main(int argc, char **argv) {
 		fclose(atfp);
 	}
 	if (!dump && sidescan_on) {
-		strcpy(sstablefile, read_file);
-		strcat(sstablefile, "_tot.sga");
+		snprintf(sstablefile, sizeof(sstablefile), "%s_tot.sga", read_file);
 		if ((stfp = fopen(sstablefile, "w")) == nullptr) {
 			error = MB_ERROR_OPEN_FAIL;
 			char *message;

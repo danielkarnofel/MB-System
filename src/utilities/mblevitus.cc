@@ -78,7 +78,11 @@ constexpr char help_message[] =
     "MBLEVITUS generates an average water velocity profile for a\n"
     "specified location from the Levitus temperature and salinity database.";
 constexpr char usage_message[] =
-    "mblevitus [-Rlon/lat -Ooutfile -V -H]";
+    "mblevitus\n"
+    "\t--help {-H}\n"
+    "\t--location=lon/lat {-Rlon/lat}\n"
+    "\t--output-file=file {-Ooutfile}\n"
+    "\t--verbose {-V}\n\n";
 
 /*--------------------------------------------------------------------*/
 
@@ -120,10 +124,38 @@ int main(int argc, char **argv) {
   /* process argument list */
   bool help = false;
   {
+    static struct option options[] = {{"help", no_argument, nullptr, 0},
+                                      {"location", required_argument, nullptr, 0},
+                                      {"output-file", required_argument, nullptr, 0},
+                                      {"verbose", no_argument, nullptr, 0},
+                                      {nullptr, 0, nullptr, 0}};
+
+    int option_index;
     bool errflg = 0;
     int c;
-    while ((c = getopt(argc, argv, "VvHhR:r:O:o:")) != -1)
+    while ((c = getopt_long(argc, argv, "VvHhR:r:O:o:", options, &option_index)) != -1)
       switch (c) {
+      /* long options all return c=0 */
+      case 0:
+        if (strcmp("help", options[option_index].name) == 0) {
+          help = true;
+        }
+        else if (strcmp("location", options[option_index].name) == 0) {
+          char *saveptr;
+          const char *lonptr = strtok_r(optarg, "/", &saveptr);
+          const char *latptr = strtok_r(nullptr, "/", &saveptr);
+          if (lonptr != nullptr && latptr != nullptr) {
+            longitude = mb_ddmmss_to_degree(lonptr);
+            latitude = mb_ddmmss_to_degree(latptr);
+          }
+        }
+        else if (strcmp("output-file", options[option_index].name) == 0) {
+          sscanf(optarg, "%1023s", ofile);
+        }
+        else if (strcmp("verbose", options[option_index].name) == 0) {
+          verbose++;
+        }
+        break;
       case 'H':
       case 'h':
         help = true;
@@ -146,7 +178,7 @@ int main(int argc, char **argv) {
       }
       case 'O':
       case 'o':
-        sscanf(optarg, "%s", ofile);
+        sscanf(optarg, "%1023s", ofile);
         break;
       case '?':
         errflg = true;
@@ -166,10 +198,19 @@ int main(int argc, char **argv) {
 
 #ifdef _WIN32
   /* Find the path to the bin directory and from it, the location of the Levitus file */
-  char levitusfile[PATH_MAX + 1];
+  char levitusfile[PATH_MAX + 1] = "";
 
-  GMT_runtime_bindir_win32(levitusfile);
+  if (GMT_runtime_bindir_win32(levitusfile) == nullptr) {
+    fprintf(stderr, "\nUnable to determine executable directory (path too long)\n");
+    fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
+    exit(MB_ERROR_OPEN_FAIL);
+  }
   char *pch = strrchr(levitusfile, '\\');
+  if (pch == nullptr) {
+    fprintf(stderr, "\nUnable to locate Levitus database relative to executable path <%s>\n", levitusfile);
+    fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
+    exit(MB_ERROR_OPEN_FAIL);
+  }
   pch[0] = '\0';
   strcat(levitusfile, "\\share\\mbsystem\\LevitusAnnual82.dat");
 #endif
@@ -219,7 +260,9 @@ int main(int argc, char **argv) {
   else
     ilon = (int)longitude;
   const double lon_actual = ilon + 0.5;
-  const int ilat = (int)(latitude + 90.0);
+  int ilat = (int)(latitude + 90.0);
+  if (ilat > 179)
+    ilat = 179;
   const double lat_actual = ilat - 89.5;
   fprintf(outfp, "\nLocation for mean annual water velocity profile:\n");
   fprintf(outfp, "  Requested:  %6.4f longitude   %6.4f latitude\n", longitude, latitude);

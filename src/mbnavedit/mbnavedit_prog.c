@@ -35,6 +35,7 @@
 
 // TODO(schwehr): useprevious int boolean -> bool
 
+#include <getopt.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -138,7 +139,19 @@ struct mbnavedit_plot_struct {
 static char program_name[] = "MBNAVEDIT";
 static char help_message[] = "MBNAVEDIT is an interactive navigation editor for swath sonar data.\n\tIt can work with any data "
                              "format supported by the MBIO library.\n";
-static char usage_message[] = "mbnavedit [-Byr/mo/da/hr/mn/sc -D  -Eyr/mo/da/hr/mn/sc \n\t-Fformat -Ifile -Ooutfile -X -V -H]";
+static char usage_message[] =
+    "mbnavedit\n"
+    "\t--begin-time=yr/mo/da/hr/mn/sc {-Byr/mo/da/hr/mn/sc}\n"
+    "\t--browse {-D}\n"
+    "\t--end-time=yr/mo/da/hr/mn/sc {-Eyr/mo/da/hr/mn/sc}\n"
+    "\t--format=format_id {-Fformat_id}\n"
+    "\t--gui-mode {-G}\n"
+    "\t--help {-H}\n"
+    "\t--input=file {-Ifile}\n"
+    "\t--strip-comments {-N}\n"
+    "\t--use-ping-data {-P}\n"
+    "\t--run-mbprocess {-X}\n"
+    "\t--verbose {-V}\n\n";
 
 /* status variables */
 static int error = MB_ERROR_NO_ERROR;
@@ -333,9 +346,63 @@ int mbnavedit_init(int argc, char **argv, int *startup_file) {
 	int c;
 	int help = 0;
 
+	static struct option options[] = {{"verbose", no_argument, NULL, 0},
+	                                   {"help", no_argument, NULL, 0},
+	                                   {"begin-time", required_argument, NULL, 0},
+	                                   {"browse", no_argument, NULL, 0},
+	                                   {"end-time", required_argument, NULL, 0},
+	                                   {"format", required_argument, NULL, 0},
+	                                   {"gui-mode", no_argument, NULL, 0},
+	                                   {"input", required_argument, NULL, 0},
+	                                   {"strip-comments", no_argument, NULL, 0},
+	                                   {"use-ping-data", no_argument, NULL, 0},
+	                                   {"run-mbprocess", no_argument, NULL, 0},
+	                                   {NULL, 0, NULL, 0}};
+	int option_index;
+
 	/* process argument list */
-	while ((c = getopt(argc, argv, "VvHhB:b:DdE:e:F:f:GgI:i:NnPpXx")) != -1)
+	while ((c = getopt_long(argc, argv, "VvHhB:b:DdE:e:F:f:GgI:i:NnPpXx", options, &option_index)) != -1)
 		switch (c) {
+		/* long options all return c=0 */
+		case 0:
+			if (strcmp("verbose", options[option_index].name) == 0) {
+				verbose++;
+			}
+			else if (strcmp("help", options[option_index].name) == 0) {
+				help++;
+			}
+			else if (strcmp("begin-time", options[option_index].name) == 0) {
+				sscanf(optarg, "%d/%d/%d/%d/%d/%d", &btime_i[0], &btime_i[1], &btime_i[2], &btime_i[3], &btime_i[4], &btime_i[5]);
+				btime_i[6] = 0;
+			}
+			else if (strcmp("browse", options[option_index].name) == 0) {
+				output_mode = OUTPUT_MODE_BROWSE;
+			}
+			else if (strcmp("end-time", options[option_index].name) == 0) {
+				sscanf(optarg, "%d/%d/%d/%d/%d/%d", &etime_i[0], &etime_i[1], &etime_i[2], &etime_i[3], &etime_i[4], &etime_i[5]);
+				etime_i[6] = 0;
+			}
+			else if (strcmp("format", options[option_index].name) == 0) {
+				sscanf(optarg, "%d", &format);
+			}
+			else if (strcmp("gui-mode", options[option_index].name) == 0) {
+				gui_mode = true;
+			}
+			else if (strcmp("input", options[option_index].name) == 0) {
+				sscanf(optarg, "%s", ifile);
+				do_parse_datalist(ifile, format);
+				fileflag++;
+			}
+			else if (strcmp("strip-comments", options[option_index].name) == 0) {
+				strip_comments = true;
+			}
+			else if (strcmp("use-ping-data", options[option_index].name) == 0) {
+				use_ping_data = true;
+			}
+			else if (strcmp("run-mbprocess", options[option_index].name) == 0) {
+				run_mbprocess = true;
+			}
+			break;
 		case 'H':
 		case 'h':
 			help++;
@@ -1583,7 +1650,7 @@ int mbnavedit_action_mouse_pick(int xx, int yy) {
 		int iping;
 		int ix;
 		int iy;
-		for (int i = current_id + 1; i < current_id + nplot; i++) {
+		for (int i = current_id; i < current_id + nplot; i++) {
 			// TODO(schwehr): Why not a switch?
 			if (mbnavplot[active_plot].type == PLOT_TINT) {
 				ix = xx - ping[i].tint_x;
@@ -3146,17 +3213,23 @@ int mbnavedit_action_deletebadtime() {
 			for (int j = i; j < nbuffnew - 1; j++) {
 				ping[j] = ping[j + 1];
 			}
-			if (i > 0)
-				ping[i - 1].tint = ping[i].time_d - ping[i - 1].time_d;
-			if (i == nbuffnew - 2 && i > 0)
-				ping[i].tint = ping[i - 1].tint;
-			else if (i == nbuffnew - 2 && i == 0)
-				ping[i].tint = 0.0;
 			nbuffnew--;
 		}
 	}
 	fprintf(stderr, "Data deleted: nbuff:%d nbuffnew:%d\n", nbuff, nbuffnew);
 	nbuff = nbuffnew;
+
+	/* recompute tint for the compacted buffer -- patching it up incrementally
+	   during the deletion loop above was unreliable when multiple points were
+	   removed in one pass (stale nbuffnew comparisons, tint taken from a point
+	   being deleted), so just recompute cleanly the same way the initial load does */
+	for (int i = 1; i < nbuff; i++) {
+		ping[i].tint = ping[i].time_d - ping[i - 1].time_d;
+	}
+	if (nbuff > 1)
+		ping[0].tint = ping[1].tint;
+	else if (nbuff == 1)
+		ping[0].tint = 0.0;
 
 	const int status = MB_SUCCESS;
 
@@ -3208,7 +3281,13 @@ int mbnavedit_get_smgcmg(int i) {
 	int status = MB_SUCCESS;
 
 	/* calculate speed made good and course made for ping i */
-	if (i < nbuff) {
+	if (i < nbuff && nbuff == 1) {
+		/* only one point in the buffer -- no neighbor exists to compute motion from */
+		ping[i].speed_made_good = 0.0;
+		ping[i].course_made_good = ping[i].heading;
+		status = MB_SUCCESS;
+	}
+	else if (i < nbuff) {
 		double time_d1, lon1, lat1;
 		double time_d2, lon2, lat2;
 		if (i == 0) {
@@ -3444,8 +3523,20 @@ int mbnavedit_get_inversion() {
 		fprintf(stderr, "dbg2  Input arguments:\n");
 	}
 
-	/* set maximum dimensions of the inverse problem */
-	const int nrows = nplot + (nplot - 1) + (nplot - 2);
+	/* nothing to invert with fewer than one point */
+	if (nplot < 1) {
+		if (verbose >= 2) {
+			fprintf(stderr, "\ndbg2  MBIO function <%s> completed\n", __func__);
+			fprintf(stderr, "dbg2  Return values:\n");
+			fprintf(stderr, "dbg2       error:       %d\n", error);
+		}
+		return (MB_SUCCESS);
+	}
+
+	/* set maximum dimensions of the inverse problem
+	   (one row per point constrains lon/lat; up to nplot-1 rows constrain speed;
+	   up to nplot-2 rows constrain acceleration -- clamp both to zero for small nplot) */
+	const int nrows = nplot + MAX(nplot - 1, 0) + MAX(nplot - 2, 0);
 	const int ncols = nplot;
 	const int nnz = 3;
 	const int ncycle = 512;
@@ -3480,28 +3571,39 @@ int mbnavedit_get_inversion() {
 	double mtodeglat;
 	mb_coor_scale(verbose, lat_avg, &mtodeglon, &mtodeglat);
 
-	/* allocate space for the inverse problem */
-	double *a;
+	/* allocate space for the inverse problem
+	   (check status after every call -- mb_mallocd() resets *error to
+	   MB_ERROR_NO_ERROR on each successful call, so a later success would
+	   otherwise silently mask an earlier allocation failure) */
+	double *a = NULL;
+	int *ia = NULL;
+	int *nia = NULL;
+	double *d = NULL;
+	double *x = NULL;
+	int *nx = NULL;
+	double *dx = NULL;
+	double *sigma = NULL;
+	double *work = NULL;
 	int status = mb_mallocd(verbose, __FILE__, __LINE__, nnz * nrows * sizeof(double), (void **)&a, &error);
-	int *ia;
-	status = mb_mallocd(verbose, __FILE__, __LINE__, nnz * nrows * sizeof(int), (void **)&ia, &error);
-	int *nia;
-	status = mb_mallocd(verbose, __FILE__, __LINE__, nrows * sizeof(int), (void **)&nia, &error);
-	double *d;
-	status = mb_mallocd(verbose, __FILE__, __LINE__, nrows * sizeof(double), (void **)&d, &error);
-	double *x;
-	status = mb_mallocd(verbose, __FILE__, __LINE__, ncols * sizeof(double), (void **)&x, &error);
-	int *nx;
-	status = mb_mallocd(verbose, __FILE__, __LINE__, ncols * sizeof(int), (void **)&nx, &error);
-	double *dx;
-	status = mb_mallocd(verbose, __FILE__, __LINE__, ncols * sizeof(double), (void **)&dx, &error);
-	double *sigma;
-	status = mb_mallocd(verbose, __FILE__, __LINE__, ncycle * sizeof(double), (void **)&sigma, &error);
-	double *work;
-	status = mb_mallocd(verbose, __FILE__, __LINE__, ncycle * sizeof(double), (void **)&work, &error);
+	if (status == MB_SUCCESS)
+		status = mb_mallocd(verbose, __FILE__, __LINE__, nnz * nrows * sizeof(int), (void **)&ia, &error);
+	if (status == MB_SUCCESS)
+		status = mb_mallocd(verbose, __FILE__, __LINE__, nrows * sizeof(int), (void **)&nia, &error);
+	if (status == MB_SUCCESS)
+		status = mb_mallocd(verbose, __FILE__, __LINE__, nrows * sizeof(double), (void **)&d, &error);
+	if (status == MB_SUCCESS)
+		status = mb_mallocd(verbose, __FILE__, __LINE__, ncols * sizeof(double), (void **)&x, &error);
+	if (status == MB_SUCCESS)
+		status = mb_mallocd(verbose, __FILE__, __LINE__, ncols * sizeof(int), (void **)&nx, &error);
+	if (status == MB_SUCCESS)
+		status = mb_mallocd(verbose, __FILE__, __LINE__, ncols * sizeof(double), (void **)&dx, &error);
+	if (status == MB_SUCCESS)
+		status = mb_mallocd(verbose, __FILE__, __LINE__, ncycle * sizeof(double), (void **)&sigma, &error);
+	if (status == MB_SUCCESS)
+		status = mb_mallocd(verbose, __FILE__, __LINE__, ncycle * sizeof(double), (void **)&work, &error);
 
 	/* do inversion */
-	if (error == MB_ERROR_NO_ERROR) {
+	if (status == MB_SUCCESS) {
 		/* set message */
 		char string[MB_PATH_MAXLINE];
 		sprintf(string, "Setting up inversion of %d longitude points", nplot);
@@ -3787,7 +3889,18 @@ int mbnavedit_get_inversion() {
 	}
 
 	/* if error initializing memory then don't invert */
-	else if (error != MB_ERROR_NO_ERROR) {
+	else if (status != MB_SUCCESS) {
+		/* free whatever was allocated before the failure */
+		mb_freed(verbose, __FILE__, __LINE__, (void **)&a, &error);
+		mb_freed(verbose, __FILE__, __LINE__, (void **)&ia, &error);
+		mb_freed(verbose, __FILE__, __LINE__, (void **)&nia, &error);
+		mb_freed(verbose, __FILE__, __LINE__, (void **)&d, &error);
+		mb_freed(verbose, __FILE__, __LINE__, (void **)&x, &error);
+		mb_freed(verbose, __FILE__, __LINE__, (void **)&nx, &error);
+		mb_freed(verbose, __FILE__, __LINE__, (void **)&dx, &error);
+		mb_freed(verbose, __FILE__, __LINE__, (void **)&sigma, &error);
+		mb_freed(verbose, __FILE__, __LINE__, (void **)&work, &error);
+
 		mb_error(verbose, error, &message);
 		fprintf(stderr, "\nMBIO Error allocating data arrays:\n%s\n", message);
 		do_error_dialog("Unable to invert for smooth", "navigation due to a memory", "allocation error!");

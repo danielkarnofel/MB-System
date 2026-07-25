@@ -172,6 +172,7 @@ int status;
 
 /* file opening parameters */
 int startup_file = 0;
+int startup_use_esf = 0;
 int numfiles = 0;
 int currentfile = -1;
 int currentfile_shown = -1;
@@ -448,7 +449,7 @@ void do_mbedit_init(int argc, char **argv) {
 	status = mbedit_set_scaling(mb_borders, mshow_time);
 
 	/* initialize mbedit proper */
-	status = mbedit_init(argc, argv, &startup_file);
+	status = mbedit_init(argc, argv, &startup_file, &startup_use_esf);
 
 	/* set up the widgets */
 	do_setup_data();
@@ -460,7 +461,16 @@ void do_mbedit_init(int argc, char **argv) {
 
 	/* if startup indicated by num_files > 0 try to open first file */
 	if (startup_file && numfiles > 0) {
-		do_load_specific_file(0);
+		/* if requested at startup, use any existing edit save file for the
+		   first file without popping up the interactive "use previous edits?"
+		   dialog - this only applies to the initial startup load */
+		if (startup_use_esf) {
+			currentfile = 0;
+			(void)do_load(true);
+		}
+		else {
+			do_load_specific_file(0);
+		}
 	}
 
 	/* finally allow expose plots */
@@ -1158,7 +1168,7 @@ void do_fileselection_list(Widget w, XtPointer client_data, XtPointer call_data)
 
 	/* get selected text */
 	static char selection_text[MB_PATH_MAXLINE];
-	get_text_string(fileSelectionText, selection_text);
+	get_text_string(fileSelectionText, selection_text, sizeof(selection_text));
 
 	/* get output file */
 	if ((int)strlen(selection_text) > 0) {
@@ -1443,12 +1453,13 @@ void do_load_check(Widget w, XtPointer client_data, XtPointer call_data) {
 
 		/* read the input file name */
 		int numfilessave = numfiles;
-		strncpy(input_file, input_file_ptr, MB_PATH_MAXLINE);
+		strncpy(input_file, input_file_ptr, MB_PATH_MAXLINE - 1);
+		input_file[MB_PATH_MAXLINE - 1] = '\0';
 		XtFree(input_file_ptr);
 
 		/* read the mbio format number from the dialog */
 		static char format_text[40];
-		get_text_string(textfield_format, format_text);
+		get_text_string(textfield_format, format_text, sizeof(format_text));
 		int format;
 		sscanf(format_text, "%d", &format);
 
@@ -2556,22 +2567,22 @@ void do_goto_apply(Widget w, XtPointer client_data, XtPointer call_data) {
 
 	char value_text[MB_PATH_MAXLINE];
 
-	get_text_string(textfield_year, value_text);
+	get_text_string(textfield_year, value_text, sizeof(value_text));
 	sscanf(value_text, "%d", &ttime_i[0]);
 
-	get_text_string(textfield_month, value_text);
+	get_text_string(textfield_month, value_text, sizeof(value_text));
 	sscanf(value_text, "%d", &ttime_i[1]);
 
-	get_text_string(textfield_day, value_text);
+	get_text_string(textfield_day, value_text, sizeof(value_text));
 	sscanf(value_text, "%d", &ttime_i[2]);
 
-	get_text_string(textfield_hour, value_text);
+	get_text_string(textfield_hour, value_text, sizeof(value_text));
 	sscanf(value_text, "%d", &ttime_i[3]);
 
-	get_text_string(textfield_minute, value_text);
+	get_text_string(textfield_minute, value_text, sizeof(value_text));
 	sscanf(value_text, "%d", &ttime_i[4]);
 
-	get_text_string(textfield_second, value_text);
+	get_text_string(textfield_second, value_text, sizeof(value_text));
 	sscanf(value_text, "%d", &ttime_i[5]);
 
 	ttime_i[6] = 0;
@@ -2816,9 +2827,10 @@ void set_label_multiline_string(Widget w, String str) {
 /* Get text item string cleanly, no memory leak */
 /*--------------------------------------------------------------------*/
 
-void get_text_string(Widget w, String str) {
+void get_text_string(Widget w, String str, size_t len) {
 	char *str_tmp = (char *)XmTextGetString(w);
-	strcpy(str, str_tmp);
+	strncpy(str, str_tmp, len - 1);
+	str[len - 1] = '\0';
 	XtFree(str_tmp);
 }
 

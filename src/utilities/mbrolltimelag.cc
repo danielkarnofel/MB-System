@@ -56,7 +56,17 @@ constexpr char help_message[] =
     "the cross correlation between the roll and the slope minus roll\n"
     "for a specified set of time lags.";
 constexpr char usage_message[] =
-    "mbrolltimelag -Iswathdata [-Fformat -Krollsource -Nnping -Ooutputname -Snavchannel -Tnlag/lagmin/lagmax -V -H ]";
+    "mbrolltimelag\n"
+    "\t--correlation-threshold=value {-Cvalue}\n"
+    "\t--format=format_id {-Fformat_id}\n"
+    "\t--help {-H}\n"
+    "\t--input=swathdata {-Iswathdata}\n"
+    "\t--lag-range=nlag/lagmin/lagmax {-Tnlag/lagmin/lagmax}\n"
+    "\t--nav-channel=navchannel {-Snavchannel}\n"
+    "\t--npings=nping {-Nnping}\n"
+    "\t--output=outputname {-Ooutputname}\n"
+    "\t--roll-source=rollsource {-Krollsource}\n"
+    "\t--verbose {-V}\n\n";
 
 /*--------------------------------------------------------------------*/
 
@@ -77,11 +87,59 @@ int main(int argc, char **argv) {
 	strcpy(swathdata, "datalist.mb-1");
 
 	{
+		static struct option options[] = {{"verbose", no_argument, nullptr, 0},
+		                                   {"help", no_argument, nullptr, 0},
+		                                   {"correlation-threshold", required_argument, nullptr, 0},
+		                                   {"format", required_argument, nullptr, 0},
+		                                   {"input", required_argument, nullptr, 0},
+		                                   {"lag-range", required_argument, nullptr, 0},
+		                                   {"nav-channel", required_argument, nullptr, 0},
+		                                   {"npings", required_argument, nullptr, 0},
+		                                   {"output", required_argument, nullptr, 0},
+		                                   {"roll-source", required_argument, nullptr, 0},
+		                                   {nullptr, 0, nullptr, 0}};
+
+		int option_index;
 		bool errflg = false;
 		int c;
 		bool help = false;
-		while ((c = getopt(argc, argv, "VvHhC:c:F:f:I:i:K:k:O:o:N:n:S:s:T:t:")) != -1)
+		while ((c = getopt_long(argc, argv, "VvHhC:c:F:f:I:i:K:k:O:o:N:n:S:s:T:t:", options, &option_index)) != -1)
 			switch (c) {
+			case 0:
+				if (strcmp("verbose", options[option_index].name) == 0) {
+					verbose++;
+				}
+				else if (strcmp("help", options[option_index].name) == 0) {
+					help = true;
+				}
+				else if (strcmp("correlation-threshold", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf", &rthreshold);
+				}
+				else if (strcmp("format", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &format);
+				}
+				else if (strcmp("input", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", swathdata);
+				}
+				else if (strcmp("lag-range", options[option_index].name) == 0) {
+					sscanf(optarg, "%d/%lf/%lf", &nlag, &lagstart, &lagend);
+				}
+				else if (strcmp("nav-channel", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &navchannel);
+					if (navchannel > 0)
+						kind = MB_DATA_NONE;
+				}
+				else if (strcmp("npings", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &npings);
+				}
+				else if (strcmp("output", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", outroot);
+					outroot_defined = true;
+				}
+				else if (strcmp("roll-source", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &kind);
+				}
+				break;
 			case 'H':
 			case 'h':
 				help = true;
@@ -191,6 +249,12 @@ int main(int argc, char **argv) {
 	int *timelaghistogram = nullptr;
 	status &= mb_reallocd(verbose, __FILE__, __LINE__, nlag * sizeof(int), (void **)&timelaghistogram, &error);
 
+	if (status != MB_SUCCESS) {
+		fprintf(stderr, "\nUnable to allocate cross correlation arrays for nlag=%d\n", nlag);
+		fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
+		exit(MB_ERROR_MEMORY_FAIL);
+	}
+
 	if (verbose > 0) {
 		fprintf(stderr, "Program %s parameters:\n", program_name);
 		fprintf(stderr, "  Input:                           %s\n", swathdata);
@@ -223,6 +287,11 @@ int main(int argc, char **argv) {
 			nroll_alloc += MBRTL_ALLOC_CHUNK;
 			status &= mb_reallocd(verbose, __FILE__, __LINE__, nroll_alloc * sizeof(double), (void **)&roll_time_d, &error);
 			status &= mb_reallocd(verbose, __FILE__, __LINE__, nroll_alloc * sizeof(double), (void **)&roll_roll, &error);
+			if (status != MB_SUCCESS) {
+				fprintf(stderr, "\nUnable to allocate roll data arrays\n");
+				fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
+				exit(MB_ERROR_MEMORY_FAIL);
+			}
 		}
 		if (nroll == 0 || time_d > roll_time_d[nroll - 1]) {
 			roll_time_d[nroll] = time_d;
@@ -345,6 +414,11 @@ int main(int argc, char **argv) {
 				status &= mb_reallocd(verbose, __FILE__, __LINE__, nslope_alloc * sizeof(double), (void **)&slope_time_d, &error);
 				status &= mb_reallocd(verbose, __FILE__, __LINE__, nslope_alloc * sizeof(double), (void **)&slope_slope, &error);
 				status &= mb_reallocd(verbose, __FILE__, __LINE__, nslope_alloc * sizeof(double), (void **)&slope_roll, &error);
+				if (status != MB_SUCCESS) {
+					fprintf(stderr, "\nUnable to allocate slope data arrays\n");
+					fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
+					exit(MB_ERROR_MEMORY_FAIL);
+				}
 			}
 			if (nslope == 0 || time_d > slope_time_d[nslope - 1]) {
 				slope_time_d[nslope] = time_d;

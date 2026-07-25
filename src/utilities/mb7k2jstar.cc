@@ -77,8 +77,22 @@ constexpr char help_message[] =
     "from Reson 7k format data and outputs in the Edgetech Jstar format.";
 constexpr char program_name[] = "mb7k2jstar";
 constexpr char usage_message[] =
-    "mb7k2jstar [-Ifile -Atype -Bmode[/threshold] -C -Fformat "
-    "-Lstartline/lineroot -Ooutfile -Rroutefile -X -H -V]";
+    "mb7k2jstar\n"
+    "\t--bottom-pick=mode[/threshold] {-Bmode[/threshold]}\n"
+    "\t--check-route-bearing {-M}\n"
+    "\t--comments {-C}\n"
+    "\t--extract-mode=type {-Atype}\n"
+    "\t--flip-sidescan {-X}\n"
+    "\t--format=format {-Fformat}\n"
+    "\t--gain=mode[/factor] {-Gmode[/factor]}\n"
+    "\t--help {-H}\n"
+    "\t--input=file {-Ifile}\n"
+    "\t--line-root=startline/lineroot {-Lstartline/lineroot}\n"
+    "\t--output=file {-Ofile}\n"
+    "\t--route-file=file {-Rfile}\n"
+    "\t--smooth=value {-Svalue}\n"
+    "\t--time-shift=timeshift {-Ttimeshift}\n"
+    "\t--verbose {-V}\n\n";
 
 /*--------------------------------------------------------------------*/
 
@@ -131,12 +145,118 @@ int main(int argc, char **argv) {
 
 	/* process argument list */
 	{
+		static struct option options[] = {{"verbose", no_argument, nullptr, 0},
+		                                  {"help", no_argument, nullptr, 0},
+		                                  {"bottom-pick", required_argument, nullptr, 0},
+		                                  {"check-route-bearing", no_argument, nullptr, 0},
+		                                  {"comments", no_argument, nullptr, 0},
+		                                  {"extract-mode", required_argument, nullptr, 0},
+		                                  {"flip-sidescan", no_argument, nullptr, 0},
+		                                  {"format", required_argument, nullptr, 0},
+		                                  {"gain", required_argument, nullptr, 0},
+		                                  {"input", required_argument, nullptr, 0},
+		                                  {"line-root", required_argument, nullptr, 0},
+		                                  {"output", required_argument, nullptr, 0},
+		                                  {"route-file", required_argument, nullptr, 0},
+		                                  {"smooth", required_argument, nullptr, 0},
+		                                  {"time-shift", required_argument, nullptr, 0},
+		                                  {nullptr, 0, nullptr, 0}};
+
 		bool errflg = false;
 		bool help = false;
 		int c;
-		while ((c = getopt(argc, argv, "A:a:B:b:CcF:f:G:g:I:i:L:l:MmO:o:R:r:S:s:T:t:XxVvHh")) != -1)
+		int option_index;
+		while ((c = getopt_long(argc, argv, "A:a:B:b:CcF:f:G:g:I:i:L:l:MmO:o:R:r:S:s:T:t:XxVvHh", options, &option_index)) != -1)
 		{
 			switch (c) {
+			/* long options all return c=0 */
+			case 0:
+				if (strcmp("verbose", options[option_index].name) == 0) {
+					verbose++;
+				}
+				else if (strcmp("help", options[option_index].name) == 0) {
+					help = true;
+				}
+				else if (strcmp("bottom-pick", options[option_index].name) == 0) {
+					int tmp;
+					const int n = sscanf(optarg, "%d/%lf", &tmp, &bottompickthreshold);
+					bottompickmode = (bottompick_t)tmp;
+					if (n == 0)
+						bottompickmode = MB7K2JSTAR_BOTTOMPICK_ALTITUDE;
+					else if (n == 1 && bottompickmode == MB7K2JSTAR_BOTTOMPICK_ARRIVAL)
+						bottompickthreshold = 0.5;
+				}
+				else if (strcmp("check-route-bearing", options[option_index].name) == 0) {
+					checkroutebearing = true;
+				}
+				else if (strcmp("comments", options[option_index].name) == 0) {
+					print_comments = true;
+				}
+				else if (strcmp("extract-mode", options[option_index].name) == 0) {
+					if (strncmp(optarg, "SSLOW", 5) == 0 || strncmp(optarg, "sslow", 5) == 0) {
+						extract_sslow = true;
+					}
+					else if (strncmp(optarg, "SSHIGH", 6) == 0 || strncmp(optarg, "sshigh", 6) == 0) {
+						extract_sshigh = true;
+					}
+					else if (strncmp(optarg, "SBP", 3) == 0 || strncmp(optarg, "sbp", 3) == 0) {
+						extract_sbp = true;
+					}
+					else if (strncmp(optarg, "ALL", 3) == 0 || strncmp(optarg, "all", 3) == 0) {
+						extract_sshigh = true;
+						extract_sslow = true;
+						extract_sbp = true;
+					}
+					else {
+						int tmp;
+						sscanf(optarg, "%d", &tmp);
+						mode = (mb7k2jstar_mode)tmp;
+						if (mode == MB7K2JSTAR_SSLOW)
+							extract_sslow = true;
+						else if (mode == MB7K2JSTAR_SSHIGH)
+							extract_sshigh = true;
+						else if (mode == MB7K2JSTAR_SBP)
+							extract_sbp = true;
+						else if (mode == MB7K2JSTAR_ALL) {
+							extract_sshigh = true;
+							extract_sslow = true;
+							extract_sbp = true;
+						}
+					}
+				}
+				else if (strcmp("flip-sidescan", options[option_index].name) == 0) {
+					ssflip = true;
+				}
+				else if (strcmp("format", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &format);
+				}
+				else if (strcmp("gain", options[option_index].name) == 0) {
+					int tmp;
+					sscanf(optarg, "%d/%lf", &tmp, &gainfactor);
+					gainmode = (ssgain_t)tmp;
+				}
+				else if (strcmp("input", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", read_file);
+				}
+				else if (strcmp("line-root", options[option_index].name) == 0) {
+					sscanf(optarg, "%d/%1023s", &startline, lineroot);
+				}
+				else if (strcmp("output", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", output_file);
+					output_file_set = true;
+				}
+				else if (strcmp("route-file", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", route_file);
+					route_file_set = true;
+				}
+				else if (strcmp("smooth", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &smooth);
+				}
+				else if (strcmp("time-shift", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf", &timeshift);
+				}
+				break;
+
 			case 'H':
 			case 'h':
 				help = true;
@@ -793,7 +913,7 @@ int main(int argc, char **argv) {
 				}
 
 				/* save current_output_file */
-				strcpy(current_output_file, output_file);
+				snprintf(current_output_file, sizeof(current_output_file), "%s", output_file);
 
 				/* get pointers to data storage */
 				omb_io_ptr = (struct mb_io_struct *)ombio_ptr;

@@ -68,7 +68,17 @@ constexpr char help_message[] =
     "The parameters controlling mbprocess are included in an ascii\n"
     "parameter file. The parameter file syntax is documented by\n"
     "the manual pages for mbprocess and mbset. \n\n";
-constexpr char usage_message[] = "mbset -Iinfile -PPARAMETER:value [-E -L -N -V -H]";
+constexpr char usage_message_old[] = "mbset -Iinfile -PPARAMETER:value [-E -L -N -V -H]";
+constexpr char usage_message[] =
+    "mbset\n"
+    "\t--explicit {-E}\n"
+    "\t--format=format_id {-Fformat_id}\n"
+    "\t--help {-H}\n"
+    "\t--input=file {-Ifile}\n"
+    "\t--look-for-files {-L}\n"
+    "\t--parameter=PARAMETER:value {-PPARAMETER:value}\n"
+    "\t--remove-nav-adjust {-N}\n"
+    "\t--verbose {-V}\n\n";
 
 /*--------------------------------------------------------------------*/
 
@@ -99,11 +109,67 @@ int main(int argc, char **argv) {
 
 	/* process argument list */
 	{
+		static struct option options[] = {{"explicit", no_argument, nullptr, 0},
+		                                  {"format", required_argument, nullptr, 0},
+		                                  {"help", no_argument, nullptr, 0},
+		                                  {"input", required_argument, nullptr, 0},
+		                                  {"look-for-files", no_argument, nullptr, 0},
+		                                  {"parameter", required_argument, nullptr, 0},
+		                                  {"remove-nav-adjust", no_argument, nullptr, 0},
+		                                  {"verbose", no_argument, nullptr, 0},
+		                                  {nullptr, 0, nullptr, 0}};
+
 		bool errflg = false;
 		int c;
+		int option_index;
 		bool help = false;
-		while ((c = getopt(argc, argv, "VvHhEeF:f:I:i:LlNnP:p:")) != -1)
+		while ((c = getopt_long(argc, argv, "VvHhEeF:f:I:i:LlNnP:p:", options, &option_index)) != -1)
 			switch (c) {
+			/* long options all return c=0 */
+			case 0:
+				if (strcmp("help", options[option_index].name) == 0) {
+					help = true;
+				}
+				else if (strcmp("verbose", options[option_index].name) == 0) {
+					verbose++;
+				}
+				else if (strcmp("explicit", options[option_index].name) == 0) {
+					is_explicit = true;
+				}
+				else if (strcmp("format", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &format);
+				}
+				else if (strcmp("input", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", read_file);
+				}
+				else if (strcmp("look-for-files", options[option_index].name) == 0) {
+					lookforfiles = true;
+				}
+				else if (strcmp("remove-nav-adjust", options[option_index].name) == 0) {
+					removembnavadjust = true;
+				}
+				else if (strcmp("parameter", options[option_index].name) == 0) {
+					if (strlen(optarg) > 1) {
+						/* Replace first '=' before ':' with ':'  */
+						for (int i = 0; i < strlen(optarg); i++) {
+							if (optarg[i] == ':') {
+								break;
+							}
+							else if (optarg[i] == '=') {
+								optarg[i] = ':';
+								break;
+							}
+						}
+
+						/* store the parameter argument */
+						pargv = (char **)realloc(pargv, (pargc + 1) * sizeof(char *));
+						pargv[pargc] = (char *)malloc(strlen(optarg) + 1);
+						strcpy(pargv[pargc], optarg);
+						pargc++;
+					}
+				}
+				break;
+
 			case 'H':
 			case 'h':
 				help = true;
@@ -906,39 +972,39 @@ int main(int argc, char **argv) {
 			/* metadata insertion */
 			if (!found && strncmp(pargv[i], "METAVESSEL:", 11) == 0) {
         found = true;
-				strcpy(process.mbp_meta_vessel, &(pargv[i][11]));
+				snprintf(process.mbp_meta_vessel, sizeof(process.mbp_meta_vessel), "%s", &(pargv[i][11]));
 			}
 			if (!found && strncmp(pargv[i], "METAINSTITUTION:", 16) == 0) {
         found = true;
-				strcpy(process.mbp_meta_institution, &(pargv[i][16]));
+				snprintf(process.mbp_meta_institution, sizeof(process.mbp_meta_institution), "%s", &(pargv[i][16]));
 			}
 			if (!found && strncmp(pargv[i], "METAPLATFORM:", 13) == 0) {
         found = true;
-				strcpy(process.mbp_meta_platform, &(pargv[i][13]));
+				snprintf(process.mbp_meta_platform, sizeof(process.mbp_meta_platform), "%s", &(pargv[i][13]));
 			}
 			if (!found && strncmp(pargv[i], "METASONARVERSION:", 17) == 0) {
         found = true;
-				strcpy(process.mbp_meta_sonarversion, &(pargv[i][17]));
+				snprintf(process.mbp_meta_sonarversion, sizeof(process.mbp_meta_sonarversion), "%s", &(pargv[i][17]));
 			}
 			if (!found && strncmp(pargv[i], "METASONAR:", 10) == 0) {
         found = true;
-				strcpy(process.mbp_meta_sonar, &(pargv[i][10]));
+				snprintf(process.mbp_meta_sonar, sizeof(process.mbp_meta_sonar), "%s", &(pargv[i][10]));
 			}
 			if (!found && strncmp(pargv[i], "METACRUISEID:", 13) == 0) {
         found = true;
-				strcpy(process.mbp_meta_cruiseid, &(pargv[i][13]));
+				snprintf(process.mbp_meta_cruiseid, sizeof(process.mbp_meta_cruiseid), "%s", &(pargv[i][13]));
 			}
 			if (!found && strncmp(pargv[i], "METACRUISENAME:", 15) == 0) {
         found = true;
-				strcpy(process.mbp_meta_cruisename, &(pargv[i][15]));
+				snprintf(process.mbp_meta_cruisename, sizeof(process.mbp_meta_cruisename), "%s", &(pargv[i][15]));
 			}
 			if (!found && strncmp(pargv[i], "METAPIINSTITUTION:", 18) == 0) {
         found = true;
-				strcpy(process.mbp_meta_piinstitution, &(pargv[i][18]));
+				snprintf(process.mbp_meta_piinstitution, sizeof(process.mbp_meta_piinstitution), "%s", &(pargv[i][18]));
 			}
 			if (!found && strncmp(pargv[i], "METACLIENT:", 11) == 0) {
         found = true;
-				strcpy(process.mbp_meta_client, &(pargv[i][11]));
+				snprintf(process.mbp_meta_client, sizeof(process.mbp_meta_client), "%s", &(pargv[i][11]));
 			}
 			if (!found && strncmp(pargv[i], "METASVCORRECTED:", 16) == 0) {
         found = true;
@@ -966,7 +1032,7 @@ int main(int argc, char **argv) {
 			}
 			if (!found && strncmp(pargv[i], "METAPI:", 7) == 0) {
         found = true;
-				strcpy(process.mbp_meta_pi, &(pargv[i][7]));
+				snprintf(process.mbp_meta_pi, sizeof(process.mbp_meta_pi), "%s", &(pargv[i][7]));
 			}
 			if (!found && strncmp(pargv[i], "METAHEADINGBIAS:", 16) == 0) {
         found = true;

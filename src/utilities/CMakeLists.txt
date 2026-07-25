@@ -70,6 +70,7 @@ set(executables
     mbsvpselect
     mbswath2las
     mbtime
+    mbusbl2fnv
     mbvoxelclean)
 
 foreach(executable ${executables})
@@ -93,6 +94,7 @@ file(WRITE levitus.h
   "const char *levitusfile = \"${CMAKE_INSTALL_PREFIX}/${levitusDir}/LevitusAnnual82.dat\";\nconst char *otps_location = \"${otpsDir_escaped}\";\n")
 
 target_link_libraries(mbsvpselect PRIVATE LibPROJ::LibPROJ)
+target_link_libraries(mbswath2las PRIVATE LibPROJ::LibPROJ)
 target_link_libraries(mbgrid PRIVATE mbaux)
 target_link_libraries(mbsegypsd PRIVATE FFTW::Double)
 target_compile_definitions(

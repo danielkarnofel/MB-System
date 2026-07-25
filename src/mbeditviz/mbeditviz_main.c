@@ -141,7 +141,13 @@ int main(int argc, char **argv) {
 	mbeditviz_init(argcsave, argv,
                        "MBeditviz",
                        "MBeditviz is a bathymetry editor and ptch test tool",
-                       "mbeditviz [-H -T -V]",
+                       "mbeditviz\n"
+                       "\t--delete-input-file {-R}\n"
+                       "\t--format=format_id {-Fformat_id}\n"
+                       "\t--help {-H}\n"
+                       "\t--input=file {-Ifile}\n"
+                       "\t--simple-mean-grid {-G}\n"
+                       "\t--verbose {-V}\n",
                        &do_mbeditviz_message_on,
                        &do_mbeditviz_message_off,
                        &do_mbeditviz_update_gui,

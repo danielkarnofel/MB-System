@@ -65,7 +65,16 @@ constexpr char help_message[] =
     "be transferred to another with ease.  The programs mbedit and\n"
     "mbprocess can be used to apply the edit events to another file.";
 constexpr char usage_message[] =
-    "mbgetesf [-Fformat -Iinfile -Mmode -Oesffile -V -H]";
+    "mbgetesf\n"
+    "\t--begin-time=yr/mo/da/hr/mn/sc {-Byr/mo/da/hr/mn/sc}\n"
+    "\t--end-time=yr/mo/da/hr/mn/sc {-Eyr/mo/da/hr/mn/sc}\n"
+    "\t--format=format_id {-Fformat_id}\n"
+    "\t--help {-H}\n"
+    "\t--input=infile {-Iinfile}\n"
+    "\t--kluge=value {-Kvalue}\n"
+    "\t--mode=value {-Mvalue}\n"
+    "\t--output=esffile {-Oesffile}\n"
+    "\t--verbose {-V}\n\n";
 
 /*--------------------------------------------------------------------*/
 int mbgetesf_save_edit(int verbose, FILE *sofp, double time_d, int beam, int action, int *error) {
@@ -156,12 +165,61 @@ int main(int argc, char **argv) {
 	mb_path sofile = "";
 
 	{
+		static struct option options[] = {
+			{"verbose", no_argument, nullptr, 0},
+			{"help", no_argument, nullptr, 0},
+			{"begin-time", required_argument, nullptr, 0},
+			{"end-time", required_argument, nullptr, 0},
+			{"format", required_argument, nullptr, 0},
+			{"input", required_argument, nullptr, 0},
+			{"kluge", required_argument, nullptr, 0},
+			{"mode", required_argument, nullptr, 0},
+			{"output", required_argument, nullptr, 0},
+			{nullptr, 0, nullptr, 0}
+		};
+
+		int option_index;
 		bool errflg = false;
 		int c;
 		bool help = false;
-		while ((c = getopt(argc, argv, "VvHhB:b:E:F:f:I:i:K:k:M:m:O:o:")) != -1)
+		while ((c = getopt_long(argc, argv, "VvHhB:b:E:F:f:I:i:K:k:M:m:O:o:", options, &option_index)) != -1)
 		{
 			switch (c) {
+			/* long options all return c=0 */
+			case 0:
+				if (strcmp("verbose", options[option_index].name) == 0) {
+					verbose++;
+				}
+				else if (strcmp("help", options[option_index].name) == 0) {
+					help = true;
+				}
+				else if (strcmp("begin-time", options[option_index].name) == 0) {
+					sscanf(optarg, "%d/%d/%d/%d/%d/%d", &btime_i[0], &btime_i[1], &btime_i[2], &btime_i[3], &btime_i[4], &btime_i[5]);
+					btime_i[6] = 0;
+				}
+				else if (strcmp("end-time", options[option_index].name) == 0) {
+					sscanf(optarg, "%d/%d/%d/%d/%d/%d", &etime_i[0], &etime_i[1], &etime_i[2], &etime_i[3], &etime_i[4], &etime_i[5]);
+					etime_i[6] = 0;
+				}
+				else if (strcmp("format", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &format);
+				}
+				else if (strcmp("input", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", ifile);
+				}
+				else if (strcmp("kluge", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &kluge);
+				}
+				else if (strcmp("mode", options[option_index].name) == 0) {
+					int tmp;
+					sscanf(optarg, "%d", &tmp);
+					mode = (getesf_mode_t)tmp;  // TODO(schwehr): Range check
+				}
+				else if (strcmp("output", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", sofile);
+					sofile_set = true;
+				}
+				break;
 			case 'H':
 			case 'h':
 				help = true;
@@ -451,7 +509,7 @@ int main(int argc, char **argv) {
 		/* deal with data without errors */
 		if (status == MB_SUCCESS && kind == MB_DATA_DATA) {
 			/* fix a problem with EM300/EM3000 data in HDCS format */
-			if (format == 151 && kluge == 1) {
+			if (format == 151 && kluge == 1 && nbath > 0) {
 				for (int i = 0; i < nbath - 1; i++)
 					beamflag[i] = beamflag[i + 1];
 				beamflag[nbath - 1] = MB_FLAG_FLAG;

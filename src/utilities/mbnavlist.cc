@@ -58,10 +58,25 @@ constexpr char help_message[] =
     "output is quite flexible; mbnavlist is tailored to produce\n"
     "ascii files in spreadsheet style with data columns separated by tabs.";
 constexpr const char usage_message[] =
-    "mbnavlist [-Byr/mo/da/hr/mn/sc -Ddecimate -Eyr/mo/da/hr/mn/sc\n"
-    "    -Fformat -Gdelimiter -H -Ifile -Kkind -Llonflip\n"
-    "    -Ooptions -Rw/e/s/n -Sspeed\n"
-    "    -Ttimegap -V -Zsegment]";
+    "mbnavlist\n"
+    "\t--begin-time=yr/mo/da/hr/mn/sc {-Byr/mo/da/hr/mn/sc}\n"
+    "\t--binary {-A}\n"
+    "\t--bounds=west/east/south/north {-Rwest/east/south/north}\n"
+    "\t--data-kind=kind {-Kkind}\n"
+    "\t--decimate=decimate {-Ddecimate}\n"
+    "\t--delimiter=delimiter {-Gdelimiter}\n"
+    "\t--end-time=yr/mo/da/hr/mn/sc {-Eyr/mo/da/hr/mn/sc}\n"
+    "\t--format=format {-Fformat}\n"
+    "\t--help {-H}\n"
+    "\t--input=file {-Ifile}\n"
+    "\t--longitude-domain=lonflip {-Llonflip}\n"
+    "\t--nav-channel=navchannel {-Nnavchannel}\n"
+    "\t--output-format=output_format {-Ooutput_format}\n"
+    "\t--projection=projection {-Jprojection}\n"
+    "\t--segment=segment {-Zsegment}\n"
+    "\t--speed-minimum=speed {-Sspeed}\n"
+    "\t--time-gap=timegap {-Ttimegap}\n"
+    "\t--verbose {-V}\n";
 
 /*--------------------------------------------------------------------*/
 int printsimplevalue(int verbose, double value, int width, int precision, bool ascii, bool *invert, bool *flipsign, int *error) {
@@ -139,7 +154,7 @@ int main(int argc, char **argv) {
 	int aux_nav_channel = -1;
 	bool ascii = true;
 	bool segment = false;
-	char segment_tag[MB_PATH_MAXLINE];
+	char segment_tag[MB_PATH_MAXLINE] = "";
 	bool use_projection = false;
 
 	/* set up the default list controls
@@ -152,12 +167,109 @@ int main(int argc, char **argv) {
 	segment_mode_t segment_mode = MBNAVLIST_SEGMENT_MODE_NONE;
 
 	{
+		static struct option options[] = {{"verbose", no_argument, nullptr, 0},
+		                                  {"help", no_argument, nullptr, 0},
+		                                  {"begin-time", required_argument, nullptr, 0},
+		                                  {"binary", no_argument, nullptr, 0},
+		                                  {"bounds", required_argument, nullptr, 0},
+		                                  {"data-kind", required_argument, nullptr, 0},
+		                                  {"decimate", required_argument, nullptr, 0},
+		                                  {"delimiter", required_argument, nullptr, 0},
+		                                  {"end-time", required_argument, nullptr, 0},
+		                                  {"format", required_argument, nullptr, 0},
+		                                  {"input", required_argument, nullptr, 0},
+		                                  {"longitude-domain", required_argument, nullptr, 0},
+		                                  {"nav-channel", required_argument, nullptr, 0},
+		                                  {"output-format", required_argument, nullptr, 0},
+		                                  {"projection", required_argument, nullptr, 0},
+		                                  {"segment", required_argument, nullptr, 0},
+		                                  {"speed-minimum", required_argument, nullptr, 0},
+		                                  {"time-gap", required_argument, nullptr, 0},
+		                                  {nullptr, 0, nullptr, 0}};
+
 		bool errflg = false;
 		bool help = false;
 		int c;
-		while ((c = getopt(argc, argv, "AaB:b:D:d:E:e:F:f:G:g:I:i:J:j:K:k:L:l:N:n:O:o:R:r:S:s:T:t:Z:z:VvHh")) != -1)
+		int option_index;
+		while ((c = getopt_long(argc, argv, "AaB:b:D:d:E:e:F:f:G:g:I:i:J:j:K:k:L:l:N:n:O:o:R:r:S:s:T:t:Z:z:VvHh", options, &option_index)) != -1)
 		{
 			switch (c) {
+			/* long options all return c=0 */
+			case 0:
+				if (strcmp("verbose", options[option_index].name) == 0) {
+					verbose++;
+				}
+				else if (strcmp("help", options[option_index].name) == 0) {
+					help = true;
+				}
+				else if (strcmp("begin-time", options[option_index].name) == 0) {
+					sscanf(optarg, "%d/%d/%d/%d/%d/%d", &btime_i[0], &btime_i[1], &btime_i[2], &btime_i[3], &btime_i[4], &btime_i[5]);
+					btime_i[6] = 0;
+				}
+				else if (strcmp("binary", options[option_index].name) == 0) {
+					ascii = false;
+				}
+				else if (strcmp("bounds", options[option_index].name) == 0) {
+					mb_get_bounds(optarg, bounds);
+				}
+				else if (strcmp("data-kind", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &data_kind);
+				}
+				else if (strcmp("decimate", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &decimate);
+				}
+				else if (strcmp("delimiter", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", delimiter);
+				}
+				else if (strcmp("end-time", options[option_index].name) == 0) {
+					sscanf(optarg, "%d/%d/%d/%d/%d/%d", &etime_i[0], &etime_i[1], &etime_i[2], &etime_i[3], &etime_i[4], &etime_i[5]);
+					etime_i[6] = 0;
+				}
+				else if (strcmp("format", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &format);
+				}
+				else if (strcmp("input", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", read_file);
+				}
+				else if (strcmp("longitude-domain", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &lonflip);
+				}
+				else if (strcmp("nav-channel", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &aux_nav_channel);
+				}
+				else if (strcmp("output-format", options[option_index].name) == 0) {
+					if (strlen(optarg) > 0) {
+						n_list = MIN(strlen(optarg), MAX_OPTIONS);
+						for (int j = 0; j < n_list; j++){
+							if (j < MAX_OPTIONS) {
+								list[j] = optarg[j];
+								if (list[j] == '^')
+									use_projection = true;
+							}
+						}
+					}
+				}
+				else if (strcmp("projection", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", projection_pars);
+					use_projection = true;
+				}
+				else if (strcmp("segment", options[option_index].name) == 0) {
+					segment = true;
+					sscanf(optarg, "%1023s", segment_tag);
+					if (strcmp(segment_tag, "swathfile") == 0)
+						segment_mode = MBNAVLIST_SEGMENT_MODE_SWATHFILE;
+					else if (strcmp(segment_tag, "datalist") == 0)
+						segment_mode = MBNAVLIST_SEGMENT_MODE_DATALIST;
+					else
+						segment_mode = MBNAVLIST_SEGMENT_MODE_TAG;
+				}
+				else if (strcmp("speed-minimum", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf", &speedmin);
+				}
+				else if (strcmp("time-gap", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf", &timegap);
+				}
+				break;
 			case 'H':
 			case 'h':
 				help = true;

@@ -154,10 +154,33 @@ constexpr char help_message[] =
     "the swaths (to the degree specified by the user) using a minimum\n"
     "curvature algorithm.";
 constexpr char usage_message[] =
-    "mbgrid   -Ifilelist -Oroot [-Adatatype -Bborder -Cclip[/mode] -Dxdim/ydim\n"
-    "          -Edx/dy/units[!]  -Fmode[/threshold] -Ggridkind -Jprojection\n"
-    "          -Kbackground -Llonflip -M -N -Ppings -Q  -Rwest/east/south/north\n"
-    "          -Rfactor  -Sspeed  -Ttension  -Utime  -V -Wscale -Xextend]";
+    "mbgrid\n"
+    "\t--algorithm=mode[/threshold] {-Fmode[/threshold]}\n"
+    "\t--background-data=background {-Kbackground}\n"
+    "\t--border=border {-Bborder}\n"
+    "\t--bounds=west/east/south/north {-Rwest/east/south/north}\n"
+    "\t--bounds=factor {-Rfactor}\n"
+    "\t--clip=clip[/mode] {-Cclip[/mode]}\n"
+    "\t--data-type=datatype {-Adatatype}\n"
+    "\t--dimensions=xdim/ydim {-Dxdim/ydim}\n"
+    "\t--extend=extend {-Xextend}\n"
+    "\t--extra-grids {-M}\n"
+    "\t--gaussian-scale=scale {-Wscale}\n"
+    "\t--help {-H}\n"
+    "\t--input=filelist {-Ifilelist}\n"
+    "\t--longitude-domain=lonflip {-Llonflip}\n"
+    "\t--output=root {-Oroot}\n"
+    "\t--output-format=gridkind {-Ggridkind}\n"
+    "\t--pings=pings {-Ppings}\n"
+    "\t--projection=projection {-Jprojection}\n"
+    "\t--shift=shiftx/shifty[/mode] {-Yshiftx/shifty[/mode]}\n"
+    "\t--spacing=dx/dy/units[!] {-Edx/dy/units[!]}\n"
+    "\t--speed-minimum=speed {-Sspeed}\n"
+    "\t--tension=tension {-Ttension}\n"
+    "\t--time-difference=time {-Utime}\n"
+    "\t--use-feet {-Q}\n"
+    "\t--use-nan {-N}\n"
+    "\t--verbose {-V}\n\n";
 
 /*--------------------------------------------------------------------*/
 /* approximate error function altered from numerical recipes */
@@ -498,13 +521,204 @@ int main(int argc, char **argv) {
   grid_interp_t clipmode = MBGRID_INTERP_NONE;
 
   {
+    static struct option options[] = {{"data-type", required_argument, nullptr, 0},
+                                      {"border", required_argument, nullptr, 0},
+                                      {"clip", required_argument, nullptr, 0},
+                                      {"dimensions", required_argument, nullptr, 0},
+                                      {"spacing", required_argument, nullptr, 0},
+                                      {"algorithm", required_argument, nullptr, 0},
+                                      {"output-format", required_argument, nullptr, 0},
+                                      {"help", no_argument, nullptr, 0},
+                                      {"input", required_argument, nullptr, 0},
+                                      {"projection", required_argument, nullptr, 0},
+                                      {"background-data", required_argument, nullptr, 0},
+                                      {"longitude-domain", required_argument, nullptr, 0},
+                                      {"extra-grids", no_argument, nullptr, 0},
+                                      {"use-nan", no_argument, nullptr, 0},
+                                      {"output", required_argument, nullptr, 0},
+                                      {"pings", required_argument, nullptr, 0},
+                                      {"use-feet", no_argument, nullptr, 0},
+                                      {"bounds", required_argument, nullptr, 0},
+                                      {"speed-minimum", required_argument, nullptr, 0},
+                                      {"tension", required_argument, nullptr, 0},
+                                      {"time-difference", required_argument, nullptr, 0},
+                                      {"verbose", no_argument, nullptr, 0},
+                                      {"gaussian-scale", required_argument, nullptr, 0},
+                                      {"extend", required_argument, nullptr, 0},
+                                      {"shift", required_argument, nullptr, 0},
+                                      {nullptr, 0, nullptr, 0}};
+
+    int option_index;
     bool errflg = false;
     int c;
     bool help = false;
-    while ((c = getopt(argc, argv, "A:a:B:b:C:c:D:d:E:e:F:f:G:g:HhI:i:J:j:K:k:L:l:MmNnO:o:P:p:QqR:r:S:s:T:t:U:u:VvW:w:X:x:Y:y:")) !=
+    while ((c = getopt_long(argc, argv, "A:a:B:b:C:c:D:d:E:e:F:f:G:g:HhI:i:J:j:K:k:L:l:MmNnO:o:P:p:QqR:r:S:s:T:t:U:u:VvW:w:X:x:Y:y:",
+                             options, &option_index)) !=
            -1)
     {
       switch (c) {
+      /* long options all return c=0 */
+      case 0:
+        if (strcmp("data-type", options[option_index].name) == 0) {
+          int tmp;
+          sscanf(optarg, "%d", &tmp);
+          datatype = (grid_data_t)tmp;
+        }
+        else if (strcmp("border", options[option_index].name) == 0) {
+          sscanf(optarg, "%lf", &border);
+          setborder = true;
+        }
+        else if (strcmp("clip", options[option_index].name) == 0) {
+          const int n = sscanf(optarg, "%d/%d", &clip, (int *)&clipmode);
+          if (n < 1)
+            clipmode = MBGRID_INTERP_NONE;
+          else if (n == 1 && clip > 0)
+            clipmode = MBGRID_INTERP_GAP;
+          else if (n == 1)
+            clipmode = MBGRID_INTERP_NONE;
+          else if (clip > 0 && clipmode < 0)
+            clipmode = MBGRID_INTERP_GAP;
+          else if (clipmode >= 3)
+            clipmode = MBGRID_INTERP_ALL;
+        }
+        else if (strcmp("dimensions", options[option_index].name) == 0) {
+          const int n = sscanf(optarg, "%d/%d", &xdim, &ydim);
+          if (n == 2)
+            set_dimensions = true;
+        }
+        else if (strcmp("spacing", options[option_index].name) == 0) {
+          if (optarg[strlen(optarg) - 1] == '!') {
+            spacing_priority = true;
+            optarg[strlen(optarg) - 1] = '\0';
+          }
+          const int n = sscanf(optarg, "%lf/%lf/%1023s", &dx_set, &dy_set, units);
+          if (n > 1)
+            set_spacing = true;
+          if (n < 3)
+            strcpy(units, "meters");
+        }
+        else if (strcmp("algorithm", options[option_index].name) == 0) {
+          int tmp;
+          double dvalue;
+          const int n = sscanf(optarg, "%d/%lf", &tmp, &dvalue);
+          grid_mode = (grid_alg_t)tmp;
+          if (n == 2) {
+            if (grid_mode == MBGRID_MINIMUM_FILTER) {
+              minormax_weighted_mean_threshold = dvalue;
+              grid_mode = MBGRID_MINIMUM_WEIGHTED_MEAN;
+            } else if (grid_mode == MBGRID_MAXIMUM_FILTER) {
+              minormax_weighted_mean_threshold = dvalue;
+              grid_mode = MBGRID_MAXIMUM_WEIGHTED_MEAN;
+            } else {
+              minormax_weighted_mean_threshold = dvalue;
+            }
+          }
+        }
+        else if (strcmp("output-format", options[option_index].name) == 0) {
+          if (optarg[0] == '=') {
+            gridkind = MBGRID_GMTGRD;
+            snprintf(gridkindstring, sizeof(gridkindstring), "%s", optarg);
+          }
+          else {
+            int tmp;
+            int nscan = sscanf(optarg, "%d", &tmp);
+            // Range check
+            if (nscan == 1 && tmp >= 1 && tmp <= 4) {
+              gridkind = (grid_type_t)tmp;
+              if (gridkind == MBGRID_CDFGRD) {
+                gridkind = MBGRID_GMTGRD;
+                gridkindstring[0] = '\0';
+              }
+            } else if (optarg[0] == 'n' || optarg[0] == 'c' || optarg[0] == 'b'
+                      || optarg[0] == 'r' || optarg[0] == 's' || optarg[0] == 'a'
+                      || optarg[0] == 'e' || optarg[0] == 'g'){
+              snprintf(gridkindstring, sizeof(gridkindstring), "=%s", optarg);
+              gridkind = MBGRID_GMTGRD;
+            } else {
+              fprintf(stdout, "Invalid gridkind option: --output-format=%s\n\n", optarg);
+              errflg = true;
+            }
+          }
+        }
+        else if (strcmp("help", options[option_index].name) == 0) {
+          help = true;
+        }
+        else if (strcmp("input", options[option_index].name) == 0) {
+          sscanf(optarg, "%1023s", filelist);
+        }
+        else if (strcmp("projection", options[option_index].name) == 0) {
+          sscanf(optarg, "%1023s", projection_pars);
+          projection_pars_f = true;
+        }
+        else if (strcmp("background-data", options[option_index].name) == 0) {
+          sscanf(optarg, "%1023s", backgroundfile);
+          if ((grdrasterid = (int)strtol(backgroundfile, NULL, 10)) <= 0)
+            grdrasterid = -1;
+        }
+        else if (strcmp("longitude-domain", options[option_index].name) == 0) {
+          sscanf(optarg, "%d", &lonflip);
+        }
+        else if (strcmp("extra-grids", options[option_index].name) == 0) {
+          more = true;
+        }
+        else if (strcmp("use-nan", options[option_index].name) == 0) {
+          use_NaN = true;
+        }
+        else if (strcmp("output", options[option_index].name) == 0) {
+          sscanf(optarg, "%1023s", fileroot);
+        }
+        else if (strcmp("pings", options[option_index].name) == 0) {
+          sscanf(optarg, "%d", &pings);
+        }
+        else if (strcmp("use-feet", options[option_index].name) == 0) {
+          bathy_in_feet = true;
+        }
+        else if (strcmp("bounds", options[option_index].name) == 0) {
+          if (strchr(optarg, '/') == nullptr) {
+            sscanf(optarg, "%lf", &boundsfactor);
+            if (boundsfactor <= 1.0)
+              boundsfactor = 0.0;
+          }
+          else {
+            mb_get_bounds(optarg, gbnd);
+            gbndset = true;
+          }
+        }
+        else if (strcmp("speed-minimum", options[option_index].name) == 0) {
+          sscanf(optarg, "%lf", &speedmin);
+        }
+        else if (strcmp("tension", options[option_index].name) == 0) {
+          sscanf(optarg, "%lf", &tension);
+        }
+        else if (strcmp("time-difference", options[option_index].name) == 0) {
+          sscanf(optarg, "%lf", &timediff);
+          timediff = 60 * timediff;
+          check_time = true;
+          if (timediff < 0.0) {
+            timediff = fabs(timediff);
+            first_in_stays = false;
+          }
+        }
+        else if (strcmp("verbose", options[option_index].name) == 0) {
+          verbose++;
+          if (verbose >= 2)
+            outfp = stderr;
+        }
+        else if (strcmp("gaussian-scale", options[option_index].name) == 0) {
+          sscanf(optarg, "%lf", &scale);
+        }
+        else if (strcmp("extend", options[option_index].name) == 0) {
+          sscanf(optarg, "%lf", &extend);
+        }
+        else if (strcmp("shift", options[option_index].name) == 0) {
+          const int n = sscanf(optarg, "%lf/%lf/%d", &shift_x, &shift_y, &shift_mode);
+          if (n == 2) {
+            shift_mode = MBGRID_SHIFT_BOUNDS;
+          }
+        }
+
+        break;
+
       case 'A':
       case 'a':
       {
@@ -580,7 +794,7 @@ int main(int argc, char **argv) {
       case 'g':
         if (optarg[0] == '=') {
           gridkind = MBGRID_GMTGRD;
-          strcpy(gridkindstring, optarg);
+          snprintf(gridkindstring, sizeof(gridkindstring), "%s", optarg);
         }
         else {
           int tmp;
@@ -790,6 +1004,8 @@ int main(int argc, char **argv) {
   if (!gbndset || (!set_spacing && !set_dimensions)) {
     struct mb_info_struct mb_info;
     int formatread = -1;
+    int formatmakeinf = formatread;
+    mb_make_info_datalist(verbose, false, filelist, &formatmakeinf, &error);
     status = mb_get_info_datalist(verbose, filelist, &formatread, &mb_info, lonflip, &error);
 
     if (!gbndset) {
@@ -1770,8 +1986,7 @@ int main(int argc, char **argv) {
   }
 
   /* open datalist file for list of all files that contribute to the grid */
-  strcpy(dfile, fileroot);
-  strcat(dfile, ".mb-1");
+  snprintf(dfile, sizeof(dfile), "%s.mb-1", fileroot);
   if ((dfp = fopen(dfile, "w")) == nullptr) {
     error = MB_ERROR_OPEN_FAIL;
     fprintf(outfp, "\nUnable to open datalist file: %s\n", dfile);

@@ -14,6 +14,11 @@ MAN_DEPRECATED = \
 	mbswplspreprocess.1
 endif
 
+if BUILD_MBTRNUTILS
+MAN_MBTRN = \
+	mbtrnpp.1
+endif
+
 man_MANS =  \
 	mbabsorption.1 \
 	mbareaclean.1 \
@@ -74,6 +79,7 @@ man_MANS =  \
 	mbmosaic.1 \
 	mbmakedatalist.1 \
 	mbmakeplatform.1 \
+	mbmapscale.1 \
 	mbminirovnav.1 \
 	mbnavadjust.1 \
 	mbnavadjustmerge.1 \
@@ -83,7 +89,6 @@ man_MANS =  \
 	mbotps.1 \
 	mbpreprocess.1 \
 	mbprocess.1 \
-	mbps.1 \
 	mbrolltimelag.1 \
 	mbroutetime.1 \
 	mbsegygrid.1 \
@@ -95,11 +100,14 @@ man_MANS =  \
 	mbsvplist.1 \
 	mbsvpselect.1 \
 	mbswath.1 \
+	mbswath2las.1 \
 	mbsystem.1 \
 	mbtiff2png.1 \
 	mbtime.1 \
+	mbusbl2fnv.1 \
 	mbvelocitytool.1 \
 	mbvoxelclean.1 \
-	$(MAN_DEPRECATED)
+	$(MAN_DEPRECATED) \
+	$(MAN_MBTRN)
 
 EXTRA_DIST = $(man_MANS)

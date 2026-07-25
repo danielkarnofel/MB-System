@@ -60,7 +60,17 @@ constexpr char help_message[] =
     "The -O option specifies how the values are output\n"
     "in an mblist-likefashion.\n";
 constexpr char usage_message[] =
-    "mbctdlist [-A -Ddecimate -Fformat -Gdelimeter -H -Ifile -Llonflip -Ooutput_format -V -Zsegment]";
+    "mbctdlist\n"
+    "\t--binary {-A}\n"
+    "\t--decimate=decimate {-Ddecimate}\n"
+    "\t--delimiter=delimiter {-Gdelimeter}\n"
+    "\t--format=format {-Fformat}\n"
+    "\t--help {-H}\n"
+    "\t--input=file {-Ifile}\n"
+    "\t--longitude-domain=lonflip {-Llonflip}\n"
+    "\t--output-format=output_format {-Ooutput_format}\n"
+    "\t--segment=segment {-Zsegment}\n"
+    "\t--verbose {-V}\n\n";
 
 /*--------------------------------------------------------------------*/
 int printsimplevalue(int verbose, double value, int width, int precision, bool ascii, bool *invert, bool *flipsign, int *error) {
@@ -160,12 +170,61 @@ int main(int argc, char **argv) {
 	char segment_tag[MB_PATH_MAXLINE] = "";
 
 	{
+		static struct option options[] = {{"verbose", no_argument, nullptr, 0},
+		                                  {"help", no_argument, nullptr, 0},
+		                                  {"binary", no_argument, nullptr, 0},
+		                                  {"decimate", required_argument, nullptr, 0},
+		                                  {"format", required_argument, nullptr, 0},
+		                                  {"delimiter", required_argument, nullptr, 0},
+		                                  {"input", required_argument, nullptr, 0},
+		                                  {"longitude-domain", required_argument, nullptr, 0},
+		                                  {"output-format", required_argument, nullptr, 0},
+		                                  {"segment", required_argument, nullptr, 0},
+		                                  {nullptr, 0, nullptr, 0}};
+
+		int option_index;
 		bool errflg = false;
 		int c;
 		bool help = false;
-		while ((c = getopt(argc, argv, "AaDdF:f:G:g:I:i:L:l:O:o:Z:z:VvHh")) != -1)
+		while ((c = getopt_long(argc, argv, "AaDdF:f:G:g:I:i:L:l:O:o:Z:z:VvHh", options, &option_index)) != -1)
 		{
 			switch (c) {
+			/* long options all return c=0 */
+			case 0:
+				if (strcmp("verbose", options[option_index].name) == 0) {
+					verbose++;
+				}
+				else if (strcmp("help", options[option_index].name) == 0) {
+					help = true;
+				}
+				else if (strcmp("binary", options[option_index].name) == 0) {
+					ascii = false;
+				}
+				else if (strcmp("decimate", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &decimate);
+				}
+				else if (strcmp("format", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &format);
+				}
+				else if (strcmp("delimiter", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", delimiter);
+				}
+				else if (strcmp("input", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", read_file);
+				}
+				else if (strcmp("longitude-domain", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &lonflip);
+				}
+				else if (strcmp("output-format", options[option_index].name) == 0) {
+					for (int j = 0, n_list = 0; j < (int)strlen(optarg); j++, n_list++)
+						if (n_list < MAX_OPTIONS)
+							list[n_list] = optarg[j];
+				}
+				else if (strcmp("segment", options[option_index].name) == 0) {
+					segment = true;
+					sscanf(optarg, "%1023s", segment_tag);
+				}
+				break;
 			case 'H':
 			case 'h':
 				help = true;

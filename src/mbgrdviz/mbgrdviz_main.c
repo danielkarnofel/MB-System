@@ -22,8 +22,10 @@
  *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
 
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 #include "mb_define.h"
@@ -119,7 +121,13 @@ void do_mbgrdviz_realtimesetup_pathmode(Widget w, XtPointer client_data, XtPoint
 
 static const char program_name[] = "MBgrdviz";
 static const char help_message[] = "MBgrdviz provides simple interactive 2D/3Dvizualization of GMT grids.";
-static const char usage_message[] = "mbgrdviz [-Igrdfile -T -V -H]";
+static const char usage_message[] =
+    "mbgrdviz\n"
+    "\t--grid-file=grdfile {-Igrdfile}\n"
+    "\t--help {-H}\n"
+    "\t--overlay-file=grdfile {-Jgrdfile}\n"
+    "\t--test {-T}\n"
+    "\t--verbose {-V}\n\n";
 char ifile[MB_PATH_MAXLINE];
 char jfile[MB_PATH_MAXLINE];
 
@@ -151,9 +159,40 @@ int main(int argc, char **argv) {
 	// sessionShellWidgetClass widget_class;
 	// widget_class.core_class.class_inited = NULL;
 
+	static struct option options[] = {{"verbose", no_argument, NULL, 0},
+	                                   {"help", no_argument, NULL, 0},
+	                                   {"grid-file", required_argument, NULL, 0},
+	                                   {"overlay-file", required_argument, NULL, 0},
+	                                   {"test", no_argument, NULL, 0},
+	                                   {NULL, 0, NULL, 0}};
+	int option_index;
+
 	/* process argument list */
-	while ((c = getopt(argc, argv, "VvHhI:i:J:j:Tt")) != -1) {
+	while ((c = getopt_long(argc, argv, "VvHhI:i:J:j:Tt", options, &option_index)) != -1) {
 		switch (c) {
+		/* long options all return c=0 */
+		case 0:
+			if (strcmp("verbose", options[option_index].name) == 0) {
+				verbose++;
+			}
+			else if (strcmp("help", options[option_index].name) == 0) {
+				help++;
+			}
+			else if (strcmp("grid-file", options[option_index].name) == 0) {
+				sscanf(optarg, "%s", ifile);
+				flag++;
+				ifileflag++;
+			}
+			else if (strcmp("overlay-file", options[option_index].name) == 0) {
+				sscanf(optarg, "%s", jfile);
+				flag++;
+				jfileflag++;
+			}
+			else if (strcmp("test", options[option_index].name) == 0) {
+				flag++;
+				testflag++;
+			}
+			break;
 		case 'H':
 		case 'h':
 			help++;

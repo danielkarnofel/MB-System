@@ -2565,6 +2565,8 @@ Widget CreatemainWindow(Widget parent) {
 	XtAddCallback(fileSelectionBox, XmNcancelCallback, do_fileselection_mode, (XtPointer)MBNA_FILESELECTION_NONE);
 
 	ac = 0;
+	XtSetArg(args[ac], XmNtitle, "Navadjust: Nav Error at Crossings");
+	ac++;
 	XtSetArg(args[ac], XmNwidth, 935);
 	ac++;
 	XtSetArg(args[ac], XmNheight, 685);
@@ -2825,6 +2827,7 @@ Widget CreatemainWindow(Widget parent) {
 		XmStringFree((XmString)tmp0);
 	}
 
+	XtAddCallback(pushButton_naverr_controls, XmNactivateCallback, do_controls_show, (XtPointer)0);
 	XtAddCallback(pushButton_naverr_controls, XmNactivateCallback, BxManageCB, (XtPointer) "form_controls");
 
 	ac = 0;

@@ -271,9 +271,17 @@ constexpr char help_message[] =
     "model selection. The program uses mbset to turn on bathymetry\n"
     "recalculation by raytracing through the sound speed model selected\n"
     "for each swath file.";
-constexpr char usage_message[] =
+constexpr char usage_message_old[] =
     "mbsvpselect -H -N -Idatalist -Ssvplist "
     "[-P0, -P1, -P2/period, -P3/range, -P3/range/1]  -V";
+constexpr char usage_message[] =
+    "mbsvpselect\n"
+    "\t--check-zero-position {-N}\n"
+    "\t--help {-H}\n"
+    "\t--input=datalist {-Idatalist}\n"
+    "\t--method=mode[/period_or_range[/seasonal]] {-Pmode[/period_or_range[/seasonal]]}\n"
+    "\t--svplist=svplist {-Ssvplist}\n"
+    "\t--verbose {-V}\n";
 
 /* ---------------------------------------------------------------- */
 /* Is leap old */
@@ -736,6 +744,11 @@ int read_recursive2(char *fname) {
 	strcat(fname, ".inf");
 	FILE *dataFile = fopen(fname, "r");
 	if (dataFile != nullptr) {
+		if (surveyLines_total >= 1000) {
+			fprintf(stderr, "\nToo many survey files referenced (max 1000) - ignoring: %s\n", fname);
+			fclose(dataFile);
+			return counter;
+		}
 		my_strcpy(holder[surveyLines_total], fname);
 		counter += 1;
 		surveyLines_total += 1;
@@ -804,8 +817,12 @@ int read_recursive(char *fileName) {
 
 	int counter = 0;
 	if ((ptr_caris != nullptr) || (ptr_mb1 != nullptr) || (ptr_mb2 != nullptr)) {
-		my_strcpy(svps[svp_total], fileName);
-		counter += 1;
+		if (svp_total >= 1000) {
+			fprintf(stderr, "\nToo many SVP files referenced (max 1000) - ignoring: %s\n", fileName);
+		} else {
+			my_strcpy(svps[svp_total], fileName);
+			counter += 1;
+		}
 	} else {
 		read_recursive(str);
 	}
@@ -1465,11 +1482,94 @@ int main(int argc, char **argv) {
 	char svplist[BUFSIZ] = "svplist.mb-1";
 
 	{
+		static struct option options[] = {{"check-zero-position", no_argument, nullptr, 0},
+		                                   {"help", no_argument, nullptr, 0},
+		                                   {"input", required_argument, nullptr, 0},
+		                                   {"method", required_argument, nullptr, 0},
+		                                   {"svplist", required_argument, nullptr, 0},
+		                                   {"verbose", no_argument, nullptr, 0},
+		                                   {nullptr, 0, nullptr, 0}};
+
+		int option_index;
 		bool errflg = false;
 		int c;
 		bool help = false;
-		while ((c = getopt(argc, argv, "HhI:i:S:s:P:p:VvNn")) != -1)
+		while ((c = getopt_long(argc, argv, "HhI:i:S:s:P:p:VvNn", options, &option_index)) != -1)
 			switch (c) {
+			case 0:
+				if (strcmp("check-zero-position", options[option_index].name) == 0) {
+					zero_test += 1;
+				}
+				else if (strcmp("help", options[option_index].name) == 0) {
+					help = true;
+				}
+				else if (strcmp("input", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", datalist);
+				}
+				else if (strcmp("method", options[option_index].name) == 0) {
+					int n1;
+					int n2;
+					int n3;
+					const int n = sscanf(optarg, "%d/%d/%d", &n1, &n2, &n3);
+					n_p2 = n;
+					/* printf("\nthis is n %d \n", n); */
+					if ((n1 != 0) && (n1 != 1) && (n1 != 2) && (n1 != 3)) {
+						puts("Only four options are available: 0 for nearest position, 1 for nearest in time, 2 for both, 3 for nearest "
+						     "in time within range");
+						puts("The default is svp_nearest in position");
+						puts("If option 2 is chosen without specifying time period, 10 hours is the default value");
+						puts("If option 3 is chosen without specifying range, 10000 meters is the default value");
+						puts("If option 3 is chosen two options are available : nearest in time and nearest in month");
+						pause_screen();
+						exit(0);
+					}
+					else {
+						if (n == 0)
+							p_flag = 0;
+						if (n == 1) {
+							p_flag = n1;
+							if (p_flag == 2) {
+								p_3_time = 10;
+								n2 = p_3_time;
+							}
+							if (p_flag == 3) {
+								p_4_range = 10000;
+								n2 = p_4_range;
+							}
+						}
+						if (n == 2) {
+							p_flag = n1;
+							if ((p_flag == 0) || (p_flag == 1))
+								puts("The options -P0 for nearest in position or -P1 for nearest in time do not need further arguments");
+
+							if (p_flag == 2)
+								p_3_time = n2;
+							if (p_flag == 3)
+								p_4_range = n2;
+						}
+						if (n == 3) {
+							p_flag = n1;
+							p_4_range = n2;
+							p_4_flage = n3;
+							if ((p_flag == 0) || (p_flag == 1))
+								puts("The options -P0 for nearest in position or -P1 for nearest in time do not need further arguments");
+
+							if ((p_4_flage != 0) && (p_4_flage != 1)) {
+								puts("If option 3 is chosen two options are available : nearest in time with -P3/0 and nearest in month "
+								     "with -P3/1");
+								pause_screen();
+								exit(0);
+							}
+						}
+					}
+				}
+				else if (strcmp("svplist", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", svplist);
+				}
+				else if (strcmp("verbose", options[option_index].name) == 0) {
+					verbose++;
+				}
+				break;
 			case 'H':
 			case 'h':
 				help = true;

@@ -59,6 +59,7 @@ set(manpages
     mbm_xyplot.1
     mbmakedatalist.1
     mbmakeplatform.1
+    mbmapscale.1
     mbmesh.1
     mbminirovnav.1
     mbmosaic.1
@@ -69,7 +70,6 @@ set(manpages
     mbotps.1
     mbpreprocess.1
     mbprocess.1
-    mbps.1
     mbrolltimelag.1
     mbroutetime.1
     mbsegygrid.1
@@ -81,9 +81,11 @@ set(manpages
     mbsvplist.1
     mbsvpselect.1
     mbswath.1
+    mbswath2las.1
     mbsystem.1
     mbtiff2png.1
     mbtime.1
+    mbusbl2fnv.1
     mbvelocitytool.1
     mbvoxelclean.1)
 
@@ -102,7 +104,12 @@ if(buildDeprecated)
         mbswplspreprocess.1)
 endif()
 
-install(FILES ${manpages} ${deprecated} DESTINATION ${CMAKE_INSTALL_MANPAGES}/man1)
+if(buildTRN)
+    set(trn
+        mbtrnpp.1)
+endif()
+
+install(FILES ${manpages} ${deprecated} ${trn} DESTINATION ${CMAKE_INSTALL_MANPAGES}/man1)
 
 message(STATUS "Installed man pages to ${CMAKE_INSTALL_MANPAGES}/man1")
 

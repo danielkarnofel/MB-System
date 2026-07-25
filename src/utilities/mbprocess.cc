@@ -5770,7 +5770,17 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
 
 int main(int argc, char **argv) {
   constexpr char usage_message[] =
-      "mbprocess -Iinfile [-C -Fformat -N -Ooutfile -P -S -T -V -H]";
+      "mbprocess -Iinfile [-C -Fformat -N -Ooutfile -P -S -T -V -H]\n"
+      "\t--format=value {-Fvalue}\n"
+      "\t--force {-P}\n"
+      "\t--help {-H}\n"
+      "\t--input=file {-Ifile}\n"
+      "\t--output=file {-Ofile}\n"
+      "\t--print-status {-S}\n"
+      "\t--strip-comments {-N}\n"
+      "\t--test {-T}\n"
+      "\t--threads=value {-Cvalue}\n"
+      "\t--verbose {-V}\n";
 
   int verbose = 0;
   int status = MB_SUCCESS;
@@ -5807,11 +5817,60 @@ int main(int argc, char **argv) {
 
   /* process argument list */
   {
+    static struct option options[] = {{"verbose", no_argument, nullptr, 0},
+                                      {"help", no_argument, nullptr, 0},
+                                      {"threads", required_argument, nullptr, 0},
+                                      {"format", required_argument, nullptr, 0},
+                                      {"input", required_argument, nullptr, 0},
+                                      {"strip-comments", no_argument, nullptr, 0},
+                                      {"output", required_argument, nullptr, 0},
+                                      {"force", no_argument, nullptr, 0},
+                                      {"print-status", no_argument, nullptr, 0},
+                                      {"test", no_argument, nullptr, 0},
+                                      {nullptr, 0, nullptr, 0}};
+
+    int option_index;
     bool errflg = false;
     int c;
     bool help = false;
-    while ((c = getopt(argc, argv, "VvHhC:c:F:f:I:i:NnO:o:PpSsTt")) != -1)
+    while ((c = getopt_long(argc, argv, "VvHhC:c:F:f:I:i:NnO:o:PpSsTt", options, &option_index)) != -1)
       switch (c) {
+      /* long options all return c=0 */
+      case 0:
+        if (strcmp("verbose", options[option_index].name) == 0) {
+          verbose++;
+        }
+        else if (strcmp("help", options[option_index].name) == 0) {
+          help = true;
+        }
+        else if (strcmp("threads", options[option_index].name) == 0) {
+          sscanf(optarg, "%d", &n_threads);
+        }
+        else if (strcmp("format", options[option_index].name) == 0) {
+          sscanf(optarg, "%d", &format);
+          mbp_format_specified = true;
+        }
+        else if (strcmp("input", options[option_index].name) == 0) {
+          mbp_ifile_specified = true;
+          sscanf(optarg, "%1023s", read_file);
+        }
+        else if (strcmp("strip-comments", options[option_index].name) == 0) {
+          strip_comments = true;
+        }
+        else if (strcmp("output", options[option_index].name) == 0) {
+          mbp_ofile_specified = true;
+          sscanf(optarg, "%1023s", mbp_ofile);
+        }
+        else if (strcmp("force", options[option_index].name) == 0) {
+          checkuptodate = false;
+        }
+        else if (strcmp("print-status", options[option_index].name) == 0) {
+          printfilestatus = true;
+        }
+        else if (strcmp("test", options[option_index].name) == 0) {
+          testonly = true;
+        }
+        break;
       case 'H':
       case 'h':
         help = true;
@@ -6015,10 +6074,13 @@ int main(int argc, char **argv) {
     int len;
     if (status == MB_SUCCESS && !mbp_ofile_specified && process->mbp_ofile[0] != '/' && process->mbp_ofile[1] != ':' &&
         strrchr(process->mbp_ifile, '/') != nullptr && (len = strrchr(process->mbp_ifile, '/') - process->mbp_ifile + 1) > 1) {
-      strcpy(mbp_ofile, process->mbp_ofile);
-      strncpy(process->mbp_ofile, process->mbp_ifile, len);
-      process->mbp_ofile[len] = '\0';
-      strcat(process->mbp_ofile, mbp_ofile);
+      snprintf(mbp_ofile, sizeof(mbp_ofile), "%s", process->mbp_ofile);
+      char dirprefix[MBP_FILENAMESIZE];
+      if (len >= (int)sizeof(dirprefix))
+        len = sizeof(dirprefix) - 1;
+      strncpy(dirprefix, process->mbp_ifile, len);
+      dirprefix[len] = '\0';
+      snprintf(process->mbp_ofile, sizeof(process->mbp_ofile), "%s%s", dirprefix, mbp_ofile);
     }
 
     /* get mod time for the input file */

@@ -92,8 +92,25 @@ constexpr char help_message[] =
     "The -T option will output a CSV table of svp#, time, longitude, latitude and number of points for SVPs.\n"
     "When the -Nmin_num_pairs option is used, only svps that have at least min_num_pairs svp values will "
     "be output.(This is particularly useful for .xse data where the svp is entered as a single values svp.)";
-constexpr char usage_message[] =
+constexpr char usage_message_old[] =
     "mbsvplist [-Asource -C -D -Fformat -H -Ifile -Mmode -O -Nmin_num_pairs -P -T -V -Z]";
+constexpr char usage_message[] =
+    "mbsvplist\n"
+    "\t--bounds=west/east/south/north {-Rwest/east/south/north}\n"
+    "\t--counts {-C}\n"
+    "\t--duplicates {-D}\n"
+    "\t--format=format_id {-Fformat_id}\n"
+    "\t--help {-H}\n"
+    "\t--input=file {-Ifile}\n"
+    "\t--min-num-pairs=min_num_pairs {-Nmin_num_pairs}\n"
+    "\t--mode=mode {-Mmode}\n"
+    "\t--output {-O}\n"
+    "\t--process {-P}\n"
+    "\t--source=source {-Asource}\n"
+    "\t--ssv {-S}\n"
+    "\t--table {-T}\n"
+    "\t--verbose {-V}\n"
+    "\t--zero-depth {-Z}\n";
 
 /*--------------------------------------------------------------------*/
 
@@ -128,11 +145,94 @@ int main(int argc, char **argv) {
   int svp_source_use = -1;
 
   {
+    static struct option options[] = {{"verbose", no_argument, nullptr, 0},
+                                      {"help", no_argument, nullptr, 0},
+                                      {"bounds", required_argument, nullptr, 0},
+                                      {"counts", no_argument, nullptr, 0},
+                                      {"duplicates", no_argument, nullptr, 0},
+                                      {"format", required_argument, nullptr, 0},
+                                      {"input", required_argument, nullptr, 0},
+                                      {"min-num-pairs", required_argument, nullptr, 0},
+                                      {"mode", required_argument, nullptr, 0},
+                                      {"output", no_argument, nullptr, 0},
+                                      {"process", no_argument, nullptr, 0},
+                                      {"source", required_argument, nullptr, 0},
+                                      {"ssv", no_argument, nullptr, 0},
+                                      {"table", no_argument, nullptr, 0},
+                                      {"zero-depth", no_argument, nullptr, 0},
+                                      {nullptr, 0, nullptr, 0}};
+
+    int option_index;
     bool errflg = false;
     int c;
     bool help = false;
-    while ((c = getopt(argc, argv, "A:a:CcDdF:f:I:i:M:m:N:n:OoPpR:r:SsTtZzVvHh")) != -1)
+    while ((c = getopt_long(argc, argv, "A:a:CcDdF:f:I:i:M:m:N:n:OoPpR:r:SsTtZzVvHh", options, &option_index)) != -1)
       switch (c) {
+      /* long options all return c=0 */
+      case 0:
+        if (strcmp("verbose", options[option_index].name) == 0) {
+          verbose++;
+        }
+        else if (strcmp("help", options[option_index].name) == 0) {
+          help = true;
+        }
+        else if (strcmp("bounds", options[option_index].name) == 0) {
+          mb_get_bounds(optarg, ssv_bounds);
+          ssv_bounds_set = true;
+        }
+        else if (strcmp("counts", options[option_index].name) == 0) {
+          output_counts = true;
+          ssv_output = false;
+        }
+        else if (strcmp("duplicates", options[option_index].name) == 0) {
+          svp_printmode = MBSVPLIST_PRINTMODE_ALL;
+        }
+        else if (strcmp("format", options[option_index].name) == 0) {
+          sscanf(optarg, "%d", &format);
+        }
+        else if (strcmp("input", options[option_index].name) == 0) {
+          sscanf(optarg, "%1023s", read_file);
+        }
+        else if (strcmp("min-num-pairs", options[option_index].name) == 0) {
+          sscanf(optarg, "%d", &min_num_pairs);
+        }
+        else if (strcmp("mode", options[option_index].name) == 0) {
+          int tmp;
+          sscanf(optarg, "%d", &tmp);
+          svp_printmode = (printmode_t)tmp;
+        }
+        else if (strcmp("output", options[option_index].name) == 0) {
+          svp_file_output = true;
+          ssv_output = false;
+        }
+        else if (strcmp("process", options[option_index].name) == 0) {
+          svp_file_output = true;
+          svp_setprocess = true;
+          ssv_output = false;
+        }
+        else if (strcmp("source", options[option_index].name) == 0) {
+          if (optarg[0] == 'C' || optarg[0] == 'c') {
+            svp_source_use = MB_DATA_CTD;
+          } else if (optarg[0] == 'S' || optarg[0] == 's') {
+            svp_source_use = MB_DATA_VELOCITY_PROFILE;
+          } else {
+            sscanf(optarg, "%d", &svp_source_use);
+          }
+        }
+        else if (strcmp("ssv", options[option_index].name) == 0) {
+          ssv_output = true;
+          svp_file_output = false;
+          svp_setprocess = false;
+        }
+        else if (strcmp("table", options[option_index].name) == 0) {
+          output_as_table = true;
+          ssv_output = false;
+        }
+        else if (strcmp("zero-depth", options[option_index].name) == 0) {
+          svp_force_zero = true;
+        }
+
+        break;
       case 'H':
       case 'h':
         help = true;
@@ -563,6 +663,11 @@ int main(int argc, char **argv) {
             svp_save_alloc += MBSVPLIST_SVP_NUM_ALLOC;
             status = mb_reallocd(verbose, __FILE__, __LINE__, svp_save_alloc * sizeof(struct mbsvplist_svp_struct),
                                  (void **)&svp_save, &error);
+            if (status != MB_SUCCESS) {
+              fprintf(stderr, "\nUnable to allocate SVP save array\n");
+              fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
+              exit(MB_ERROR_MEMORY_FAIL);
+            }
           }
 
           /* save the svp */

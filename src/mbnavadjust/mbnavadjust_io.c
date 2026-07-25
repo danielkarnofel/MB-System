@@ -178,6 +178,7 @@ int mbnavadjust_new_project(int verbose, char *projectpath, double section_lengt
       memset((void *)project->refgrid_bounds, 0, 4 * MBNA_REFGRID_NUM_MAX * sizeof(double));
 
       project->section_length = section_length;
+      project->section_soundings = section_soundings;
       project->bin_beams_bath = 0;
       project->bin_swathwidth = 0;
       project->bin_pseudobeamwidth = 0.0;
@@ -208,6 +209,7 @@ int mbnavadjust_new_project(int verbose, char *projectpath, double section_lengt
       project->modelplot = false;
       project->modelplot_style = MBNA_MODELPLOT_TIMESERIES;
       project->modelplot_uptodate = false;
+      project->use_mode = MBNA_USE_MODE_PRIMARY;
 
       /* create data directory */
 #ifdef _WIN32
@@ -241,6 +243,86 @@ int mbnavadjust_new_project(int verbose, char *projectpath, double section_lengt
         fprintf(project->logfp, "New project initialized: %s\n > Project home: %s\n", project->name, project->home);
       }
     }
+  }
+
+  if (verbose >= 2) {
+    fprintf(stderr, "\ndbg2  MBnavadjust function <%s> completed\n", __func__);
+    fprintf(stderr, "dbg2  Return values:\n");
+    fprintf(stderr, "dbg2       error:       %d\n", *error);
+    fprintf(stderr, "dbg2  Return status:\n");
+    fprintf(stderr, "dbg2       status:      %d\n", status);
+  }
+
+  return (status);
+}
+/*--------------------------------------------------------------------*/
+int mbnavadjust_apply_settings(int verbose, struct mbna_project *project, unsigned int mask,
+                               double section_length, int section_soundings, double cont_int,
+                               double col_int, double tick_int, double label_int, int decimation,
+                               double smoothing, double zoffsetwidth, int *error) {
+  if (verbose >= 2) {
+    fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
+    fprintf(stderr, "dbg2  Input arguments:\n");
+    fprintf(stderr, "dbg2       verbose:      %d\n", verbose);
+    fprintf(stderr, "dbg2       project:      %p\n", (void *)project);
+    fprintf(stderr, "dbg2       mask:         %u\n", mask);
+    fprintf(stderr, "dbg2       section_length:     %f\n", section_length);
+    fprintf(stderr, "dbg2       section_soundings:  %d\n", section_soundings);
+    fprintf(stderr, "dbg2       cont_int:     %f\n", cont_int);
+    fprintf(stderr, "dbg2       col_int:      %f\n", col_int);
+    fprintf(stderr, "dbg2       tick_int:     %f\n", tick_int);
+    fprintf(stderr, "dbg2       label_int:    %f\n", label_int);
+    fprintf(stderr, "dbg2       decimation:   %d\n", decimation);
+    fprintf(stderr, "dbg2       smoothing:    %f\n", smoothing);
+    fprintf(stderr, "dbg2       zoffsetwidth: %f\n", zoffsetwidth);
+  }
+
+  int status = MB_SUCCESS;
+
+  if (mask & MBNA_SETTINGS_SECTION_LENGTH) {
+    project->section_length = section_length;
+    if (verbose > 0)
+      fprintf(stderr, "Setting section_length to %f\n", section_length);
+  }
+  if (mask & MBNA_SETTINGS_SECTION_SOUNDINGS) {
+    project->section_soundings = section_soundings;
+    if (verbose > 0)
+      fprintf(stderr, "Setting section_soundings to %d\n", section_soundings);
+  }
+  if (mask & MBNA_SETTINGS_CONT_INT) {
+    project->cont_int = cont_int;
+    if (verbose > 0)
+      fprintf(stderr, "Setting cont_int to %f\n", cont_int);
+  }
+  if (mask & MBNA_SETTINGS_COL_INT) {
+    project->col_int = col_int;
+    if (verbose > 0)
+      fprintf(stderr, "Setting col_int to %f\n", col_int);
+  }
+  if (mask & MBNA_SETTINGS_TICK_INT) {
+    project->tick_int = tick_int;
+    if (verbose > 0)
+      fprintf(stderr, "Setting tick_int to %f\n", tick_int);
+  }
+  if (mask & MBNA_SETTINGS_LABEL_INT) {
+    project->label_int = label_int;
+    if (verbose > 0)
+      fprintf(stderr, "Setting label_int to %f\n", label_int);
+  }
+  if (mask & MBNA_SETTINGS_DECIMATION) {
+    project->decimation = decimation;
+    if (verbose > 0)
+      fprintf(stderr, "Setting decimation to %d\n", decimation);
+  }
+  if (mask & MBNA_SETTINGS_SMOOTHING) {
+    project->smoothing = smoothing;
+    if (verbose > 0)
+      fprintf(stderr, "Setting smoothing to %f\n", smoothing);
+  }
+  if (mask & MBNA_SETTINGS_ZOFFSETWIDTH) {
+    project->zoffsetwidth = zoffsetwidth;
+    if (verbose > 0)
+      fprintf(stderr, "Setting zoffsetwidth to %f\n", zoffsetwidth);
   }
 
   if (verbose >= 2) {
@@ -342,7 +424,7 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
         mb_path obuffer;
         if (status == MB_SUCCESS &&
             ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-             (nscan = sscanf(buffer, "%s %s", label, obuffer)) != 2 || strcmp(label, "MB-SYSTEM_VERSION") != 0))
+             (nscan = sscanf(buffer, "%1023s %1023s", label, obuffer)) != 2 || strcmp(label, "MB-SYSTEM_VERSION") != 0))
           status = MB_FAILURE;
         if (status == MB_FAILURE) {
           fprintf(stderr, "Die at line:%d file:%s buffer:%s\n", __LINE__, __FILE__, buffer);
@@ -351,7 +433,7 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
 
         if (status == MB_SUCCESS &&
             ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-             (nscan = sscanf(buffer, "%s %s", label, obuffer)) != 2 || strcmp(label, "PROGRAM_VERSION") != 0))
+             (nscan = sscanf(buffer, "%1023s %1023s", label, obuffer)) != 2 || strcmp(label, "PROGRAM_VERSION") != 0))
           status = MB_FAILURE;
         if (status == MB_FAILURE) {
           fprintf(stderr, "Die at line:%d file:%s buffer:%s\n", __LINE__, __FILE__, buffer);
@@ -361,7 +443,7 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
         int versionmajor;
         int versionminor;
         if (status == MB_SUCCESS && ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-                   (nscan = sscanf(buffer, "%s %d.%d", label, &versionmajor, &versionminor)) != 3 ||
+                   (nscan = sscanf(buffer, "%1023s %d.%d", label, &versionmajor, &versionminor)) != 3 ||
                    strcmp(label, "FILE_VERSION") != 0))
           status = MB_FAILURE;
         if (status == MB_FAILURE) {
@@ -383,7 +465,7 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
         if (version_id >= 302) {
           if (status == MB_SUCCESS &&
               ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-               (nscan = sscanf(buffer, "%s %s", label, obuffer)) != 2 || strcmp(label, "ORIGIN") != 0))
+               (nscan = sscanf(buffer, "%1023s %1023s", label, obuffer)) != 2 || strcmp(label, "ORIGIN") != 0))
             status = MB_FAILURE;
         }
         if (status == MB_FAILURE) {
@@ -393,7 +475,7 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
 
         if (status == MB_SUCCESS &&
             ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-             (nscan = sscanf(buffer, "%s %s", label, obuffer)) != 2 || strcmp(label, "NAME") != 0))
+             (nscan = sscanf(buffer, "%1023s %1023s", label, obuffer)) != 2 || strcmp(label, "NAME") != 0))
           status = MB_FAILURE;
         if (status == MB_FAILURE) {
           fprintf(stderr, "Die at line:%d file:%s buffer:%s\n", __LINE__, __FILE__, buffer);
@@ -402,7 +484,7 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
 
         if (status == MB_SUCCESS &&
             ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-             (nscan = sscanf(buffer, "%s %s", label, obuffer)) != 2 || strcmp(label, "PATH") != 0))
+             (nscan = sscanf(buffer, "%1023s %1023s", label, obuffer)) != 2 || strcmp(label, "PATH") != 0))
           status = MB_FAILURE;
         if (status == MB_FAILURE) {
           fprintf(stderr, "Die at line:%d file:%s buffer:%s\n", __LINE__, __FILE__, buffer);
@@ -411,7 +493,7 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
 
         if (status == MB_SUCCESS &&
             ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-             (nscan = sscanf(buffer, "%s %s", label, obuffer)) != 2 || strcmp(label, "HOME") != 0))
+             (nscan = sscanf(buffer, "%1023s %1023s", label, obuffer)) != 2 || strcmp(label, "HOME") != 0))
           status = MB_FAILURE;
         if (status == MB_FAILURE) {
           fprintf(stderr, "Die at line:%d file:%s buffer:%s\n", __LINE__, __FILE__, buffer);
@@ -420,7 +502,7 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
 
         if (status == MB_SUCCESS &&
             ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-             (nscan = sscanf(buffer, "%s %s", label, obuffer)) != 2 || strcmp(label, "DATADIR") != 0))
+             (nscan = sscanf(buffer, "%1023s %1023s", label, obuffer)) != 2 || strcmp(label, "DATADIR") != 0))
           status = MB_FAILURE;
         if (status == MB_FAILURE) {
           fprintf(stderr, "Die at line:%d file:%s buffer:%s\n", __LINE__, __FILE__, buffer);
@@ -430,7 +512,7 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
         if (version_id >= 312) {
           if (status == MB_SUCCESS &&
               ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-               (nscan = sscanf(buffer, "%s %d", label, &project->num_refgrids)) != 2 || strcmp(label, "NUMREFERENCEGRIDS") != 0))
+               (nscan = sscanf(buffer, "%1023s %d", label, &project->num_refgrids)) != 2 || strcmp(label, "NUMREFERENCEGRIDS") != 0))
             status = MB_FAILURE;
           if (status == MB_FAILURE) {
             fprintf(stderr, "Die at line:%d file:%s buffer:%s\n", __LINE__, __FILE__, buffer);
@@ -441,7 +523,7 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
               if ((result = fgets(buffer, sizeof(buffer), hfp)) == buffer
                   && strncmp("REFERENCEGRID", buffer, 13) == 0) {
                 if (irefgrid < MBNA_REFGRID_NUM_MAX) {
-                  nscan = sscanf(buffer, "%s %s %lf %lf %lf %lf",
+                  nscan = sscanf(buffer, "%1023s %1023s %lf %lf %lf %lf",
                                   label, project->refgrid_names[irefgrid],
                                   &project->refgrid_bounds[0][irefgrid],
                                   &project->refgrid_bounds[1][irefgrid],
@@ -486,7 +568,7 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
           project->num_refgrids = 0;
           if ((result = fgets(buffer, sizeof(buffer), hfp)) == buffer
               && strncmp("REFERENCEGRID", buffer, 13) == 0) {
-            nscan = sscanf(buffer, "%s %s", label, project->refgrid_names[0]);
+            nscan = sscanf(buffer, "%1023s %1023s", label, project->refgrid_names[0]);
             if (nscan == 2 && strncmp(project->refgrid_names[0], "NONE", 4) != 0) {
               struct mbna_grid refgrid;
               memset(&refgrid, 0, sizeof(refgrid));
@@ -525,7 +607,7 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
 
         if (status == MB_SUCCESS &&
             ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-             (nscan = sscanf(buffer, "%s %d", label, &project->num_files)) != 2 || strcmp(label, "NUMFILES") != 0))
+             (nscan = sscanf(buffer, "%1023s %d", label, &project->num_files)) != 2 || strcmp(label, "NUMFILES") != 0))
           status = MB_FAILURE;
         if (status == MB_FAILURE) {
           fprintf(stderr, "Die at line:%d file:%s buffer:%s\n", __LINE__, __FILE__, buffer);
@@ -535,17 +617,17 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
         if (version_id >= 316) {
           if (status == MB_SUCCESS &&
               ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-               (nscan = sscanf(buffer, "%s %d", label, &project->num_surveys)) != 2 || strcmp(label, "NUMSURVEYS") != 0))
+               (nscan = sscanf(buffer, "%1023s %d", label, &project->num_surveys)) != 2 || strcmp(label, "NUMSURVEYS") != 0))
             status = MB_FAILURE;
           if (status == MB_SUCCESS &&
               ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-               (nscan = sscanf(buffer, "%s %d", label, &project->num_blocks)) != 2 || strcmp(label, "NUMBLOCKS") != 0))
+               (nscan = sscanf(buffer, "%1023s %d", label, &project->num_blocks)) != 2 || strcmp(label, "NUMBLOCKS") != 0))
             status = MB_FAILURE;
         }
         else if (version_id >= 306) {
           if (status == MB_SUCCESS &&
               ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-               (nscan = sscanf(buffer, "%s %d", label, &project->num_blocks)) != 2 || strcmp(label, "NUMBLOCKS") != 0))
+               (nscan = sscanf(buffer, "%1023s %d", label, &project->num_blocks)) != 2 || strcmp(label, "NUMBLOCKS") != 0))
             status = MB_FAILURE;
           if (status == MB_SUCCESS)
             project->num_surveys = project->num_blocks;
@@ -560,7 +642,7 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
         }
 
         if (status == MB_SUCCESS && ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-                   (nscan = sscanf(buffer, "%s %d", label, &project->num_crossings)) != 2 ||
+                   (nscan = sscanf(buffer, "%1023s %d", label, &project->num_crossings)) != 2 ||
                    strcmp(label, "NUMCROSSINGS") != 0))
           status = MB_FAILURE;
         if (status == MB_FAILURE) {
@@ -569,7 +651,7 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
         }
 
         if (status == MB_SUCCESS && ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-                   (nscan = sscanf(buffer, "%s %lf", label, &project->section_length)) != 2 ||
+                   (nscan = sscanf(buffer, "%1023s %lf", label, &project->section_length)) != 2 ||
                    strcmp(label, "SECTIONLENGTH") != 0))
           status = MB_FAILURE;
         if (status == MB_FAILURE) {
@@ -579,7 +661,7 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
 
         if (status == MB_SUCCESS && version_id >= 101 &&
             ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-             (nscan = sscanf(buffer, "%s %d", label, &project->section_soundings)) != 2 ||
+             (nscan = sscanf(buffer, "%1023s %d", label, &project->section_soundings)) != 2 ||
              strcmp(label, "SECTIONSOUNDINGS") != 0))
           status = MB_FAILURE;
         if (status == MB_FAILURE) {
@@ -591,7 +673,7 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
 
         if (status == MB_SUCCESS &&
             ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-             (nscan = sscanf(buffer, "%s %d", label, &project->decimation)) != 2 || strcmp(label, "DECIMATION") != 0))
+             (nscan = sscanf(buffer, "%1023s %d", label, &project->decimation)) != 2 || strcmp(label, "DECIMATION") != 0))
           status = MB_FAILURE;
         if (status == MB_FAILURE) {
           fprintf(stderr, "Die at line:%d file:%s buffer:%s\n", __LINE__, __FILE__, buffer);
@@ -600,7 +682,7 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
 
         if (status == MB_SUCCESS &&
             ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-             (nscan = sscanf(buffer, "%s %lf", label, &project->cont_int)) != 2 || strcmp(label, "CONTOURINTERVAL") != 0))
+             (nscan = sscanf(buffer, "%1023s %lf", label, &project->cont_int)) != 2 || strcmp(label, "CONTOURINTERVAL") != 0))
           status = MB_FAILURE;
         if (status == MB_FAILURE) {
           fprintf(stderr, "Die at line:%d file:%s buffer:%s\n", __LINE__, __FILE__, buffer);
@@ -609,7 +691,7 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
 
         if (status == MB_SUCCESS &&
             ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-             (nscan = sscanf(buffer, "%s %lf", label, &project->col_int)) != 2 || strcmp(label, "COLORINTERVAL") != 0))
+             (nscan = sscanf(buffer, "%1023s %lf", label, &project->col_int)) != 2 || strcmp(label, "COLORINTERVAL") != 0))
           status = MB_FAILURE;
         if (status == MB_FAILURE) {
           fprintf(stderr, "Die at line:%d file:%s buffer:%s\n", __LINE__, __FILE__, buffer);
@@ -618,7 +700,7 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
 
         if (status == MB_SUCCESS &&
             ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-             (nscan = sscanf(buffer, "%s %lf", label, &project->tick_int)) != 2 || strcmp(label, "TICKINTERVAL") != 0))
+             (nscan = sscanf(buffer, "%1023s %lf", label, &project->tick_int)) != 2 || strcmp(label, "TICKINTERVAL") != 0))
           status = MB_FAILURE;
         if (status == MB_FAILURE) {
           fprintf(stderr, "Die at line:%d file:%s buffer:%s\n", __LINE__, __FILE__, buffer);
@@ -626,7 +708,7 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
         }
 
         if (status == MB_SUCCESS && ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-                   (nscan = sscanf(buffer, "%s %d", label, &project->inversion_status)) != 2 ||
+                   (nscan = sscanf(buffer, "%1023s %d", label, &project->inversion_status)) != 2 ||
                    strcmp(label, "INVERSION") != 0))
           status = MB_FAILURE;
         if (status == MB_FAILURE) {
@@ -637,7 +719,7 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
         if (status == MB_SUCCESS) {
           if (version_id >= 307) {
             if ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-                (nscan = sscanf(buffer, "%s %d", label, &project->grid_status)) != 2 ||
+                (nscan = sscanf(buffer, "%1023s %d", label, &project->grid_status)) != 2 ||
                 strcmp(label, "GRIDSTATUS") != 0)
               status = MB_FAILURE;
           }
@@ -645,14 +727,14 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
         if (status == MB_SUCCESS) {
           if (version_id >= 301) {
             if ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-                (nscan = sscanf(buffer, "%s %lf", label, &project->smoothing)) != 2 ||
+                (nscan = sscanf(buffer, "%1023s %lf", label, &project->smoothing)) != 2 ||
                 strcmp(label, "SMOOTHING") != 0)
               status = MB_FAILURE;
             project->precision = SIGMA_MINIMUM;
           }
           else if (version_id >= 103) {
             if ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-                (nscan = sscanf(buffer, "%s %lf", label, &project->precision)) != 2 ||
+                (nscan = sscanf(buffer, "%1023s %lf", label, &project->precision)) != 2 ||
                 strcmp(label, "PRECISION") != 0)
               status = MB_FAILURE;
             project->smoothing = MBNA_SMOOTHING_DEFAULT;
@@ -670,7 +752,7 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
         if (status == MB_SUCCESS) {
           if (version_id >= 105) {
             if ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-                (nscan = sscanf(buffer, "%s %lf", label, &project->zoffsetwidth)) != 2 ||
+                (nscan = sscanf(buffer, "%1023s %lf", label, &project->zoffsetwidth)) != 2 ||
                 strcmp(label, "ZOFFSETWIDTH") != 0)
               status = MB_FAILURE;
           }
@@ -679,7 +761,7 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
         }
 
         if (status == MB_SUCCESS && version_id >= 315 && ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-                   (nscan = sscanf(buffer, "%s %d", label, &project->use_mode)) != 2 ||
+                   (nscan = sscanf(buffer, "%1023s %d", label, &project->use_mode)) != 2 ||
                    strcmp(label, "USEMODE") != 0))
           status = MB_FAILURE;
         if (status == MB_FAILURE) {
@@ -745,7 +827,7 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
           if (version_id >= 316) {
             if (status == MB_SUCCESS &&
                 ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-                 (nscan = sscanf(buffer, "FILE %d %d %d %d %d %d %lf %lf %lf %lf %lf %lf %lf %d %d %s", &idummy,
+                 (nscan = sscanf(buffer, "FILE %d %d %d %d %d %d %lf %lf %lf %lf %lf %lf %lf %d %d %1023s", &idummy,
                      &(file->status), &(file->id), &(file->format), &(file->survey), &(file->block),
                      &(file->block_offset_x), &(file->block_offset_y), &(file->block_offset_z),
                      &(file->heading_bias_import), &(file->roll_bias_import), &(file->heading_bias),
@@ -759,7 +841,7 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
           else if (version_id >= 306) {
             if (status == MB_SUCCESS &&
                 ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-                 (nscan = sscanf(buffer, "FILE %d %d %d %d %d %lf %lf %lf %lf %lf %lf %lf %d %d %s", &idummy,
+                 (nscan = sscanf(buffer, "FILE %d %d %d %d %d %lf %lf %lf %lf %lf %lf %lf %d %d %1023s", &idummy,
                      &(file->status), &(file->id), &(file->format), &(file->block),
                      &(file->block_offset_x), &(file->block_offset_y), &(file->block_offset_z),
                      &(file->heading_bias_import), &(file->roll_bias_import), &(file->heading_bias),
@@ -770,7 +852,7 @@ int mbnavadjust_read_project(int verbose, char *projectpath, struct mbna_project
           else {
             if (status == MB_SUCCESS &&
                 ((result = fgets(buffer, sizeof(buffer), hfp)) != buffer ||
-                 (nscan = sscanf(buffer, "FILE %d %d %d %d %lf %lf %lf %lf %d %d %s", &idummy, &(file->status),
+                 (nscan = sscanf(buffer, "FILE %d %d %d %d %lf %lf %lf %lf %d %d %1023s", &idummy, &(file->status),
                      &(file->id), &(file->format), &(file->heading_bias_import),
                      &(file->roll_bias_import), &(file->heading_bias), &(file->roll_bias),
                      &(file->num_sections), &(file->output_id), file->file)) != 11))
@@ -837,6 +919,12 @@ __FILE__, __LINE__, __FUNCTION__, ifile, isection, buffer, result, nscan);
             }
             if (nscan < 15)
               section->contoursuptodate = false;
+            if (section->num_snav < 0 || section->num_snav > MBNA_SNAV_NUM) {
+              fprintf(stderr, "Corrupted project file: section num_snav %d exceeds maximum %d\n",
+                      section->num_snav, MBNA_SNAV_NUM);
+              fprintf(stderr, "Die at line:%d file:%s\n", __LINE__, __FILE__);
+              exit(0);
+            }
             for (k = MBNA_MASK_DIM - 1; k >= 0; k--) {
               if (status == MB_SUCCESS)
                 result = fgets(buffer, sizeof(buffer), hfp);
@@ -1182,6 +1270,14 @@ __FILE__, __LINE__, __FUNCTION__, ifile, isection, buffer, result, nscan);
               }
             }
 
+            if (section->globaltie.snav != MBNA_SELECT_NONE &&
+                (section->globaltie.snav < 0 || section->globaltie.snav >= section->num_snav)) {
+              fprintf(stderr, "Corrupted project file: section globaltie.snav %d out of range [0,%d)\n",
+                      section->globaltie.snav, section->num_snav);
+              fprintf(stderr, "Die at line:%d file:%s\n", __LINE__, __FILE__);
+              exit(0);
+            }
+
             if (section->globaltie.status == MBNA_TIE_NONE && section->globaltie.snav == -1) {
               section->globaltie.inversion_status = 0;
               section->globaltie.offset_x = 0.0;
@@ -1364,6 +1460,31 @@ __FILE__, __LINE__, __FUNCTION__, ifile, isection, buffer, result, nscan);
             crossing->section_1 = crossing->section_2;
             crossing->file_id_2 = idummy;
             crossing->section_2 = jdummy;
+          }
+
+          /* validate crossing references before using them to index into
+              project->files[]/sections[] and the fixed-size ties[] array */
+          if (status == MB_SUCCESS) {
+            if (crossing->file_id_1 < 0 || crossing->file_id_1 >= project->num_files ||
+                crossing->file_id_2 < 0 || crossing->file_id_2 >= project->num_files) {
+              fprintf(stderr, "Corrupted project file: crossing %d references invalid file_id (%d, %d) with num_files=%d\n",
+                      icrossing, crossing->file_id_1, crossing->file_id_2, project->num_files);
+              fprintf(stderr, "Die at line:%d file:%s\n", __LINE__, __FILE__);
+              exit(0);
+            }
+            else if (crossing->section_1 < 0 || crossing->section_1 >= project->files[crossing->file_id_1].num_sections ||
+                     crossing->section_2 < 0 || crossing->section_2 >= project->files[crossing->file_id_2].num_sections) {
+              fprintf(stderr, "Corrupted project file: crossing %d references invalid section (%d, %d)\n",
+                      icrossing, crossing->section_1, crossing->section_2);
+              fprintf(stderr, "Die at line:%d file:%s\n", __LINE__, __FILE__);
+              exit(0);
+            }
+            else if (crossing->num_ties < 0 || crossing->num_ties > MBNA_SNAV_NUM) {
+              fprintf(stderr, "Corrupted project file: crossing %d num_ties %d exceeds maximum %d\n",
+                      icrossing, crossing->num_ties, MBNA_SNAV_NUM);
+              fprintf(stderr, "Die at line:%d file:%s\n", __LINE__, __FILE__);
+              exit(0);
+            }
           }
 
           /* read ties */
@@ -1749,8 +1870,13 @@ int mbnavadjust_close_project(int verbose, struct mbna_project *project, int *er
   /* deallocate memory and reset values */
   for (int i = 0; i < project->num_files; i++) {
     file = &project->files[i];
-    if (file->sections != NULL)
-      mb_freed(verbose, __FILE__, __LINE__, (void **)&file->sections, error);
+    if (file->sections != NULL) {
+      /* file->sections is allocated with raw malloc()/realloc(), not
+          mb_mallocd()/mb_reallocd(), so it must be freed with raw free() -
+          mb_freed() silently no-ops on a pointer it never allocated */
+      free(file->sections);
+      file->sections = NULL;
+    }
   }
   if (project->files != NULL) {
     free(project->files);
@@ -2042,7 +2168,6 @@ int mbnavadjust_write_project(int verbose, struct mbna_project *project,
   /* write mbgrdviz route file for all unfixed true crossings */
   snprintf(routefile,sizeof(mb_pathplusplus), "%s%s_truecrossing.rte", project->path, project->name);
   if ((hfp = fopen(routefile, "w")) == NULL) {
-    fclose(hfp);
     status = MB_FAILURE;
     *error = MB_ERROR_OPEN_FAIL;
     fprintf(stderr, " > Unable to open output tie route file %s\n", routefile);
@@ -2110,7 +2235,6 @@ int mbnavadjust_write_project(int verbose, struct mbna_project *project,
   /* write mbgrdviz route file for all unfixed >=50% crossings */
   snprintf(routefile, sizeof(mb_pathplusplus), "%s%s_gt50crossing.rte", project->path, project->name);
   if ((hfp = fopen(routefile, "w")) == NULL) {
-    fclose(hfp);
     status = MB_FAILURE;
     *error = MB_ERROR_OPEN_FAIL;
     fprintf(stderr, " > Unable to open output tie route file %s\n", routefile);
@@ -2178,7 +2302,6 @@ int mbnavadjust_write_project(int verbose, struct mbna_project *project,
   /* write mbgrdviz route file for all unfixed >=25% but less than 50% crossings */
   snprintf(routefile, sizeof(mb_pathplusplus), "%s%s_gt25crossing.rte", project->path, project->name);
   if ((hfp = fopen(routefile, "w")) == NULL) {
-    fclose(hfp);
     status = MB_FAILURE;
     *error = MB_ERROR_OPEN_FAIL;
     fprintf(stderr, " > Unable to open output tie route file %s\n", routefile);
@@ -2246,7 +2369,6 @@ int mbnavadjust_write_project(int verbose, struct mbna_project *project,
   /* write mbgrdviz route file for all unfixed <25% crossings */
   snprintf(routefile, sizeof(mb_pathplusplus), "%s%s_lt25crossing.rte", project->path, project->name);
   if ((hfp = fopen(routefile, "w")) == NULL) {
-    fclose(hfp);
     status = MB_FAILURE;
     *error = MB_ERROR_OPEN_FAIL;
     fprintf(stderr, " > Unable to open output tie route file %s\n", routefile);
@@ -2314,7 +2436,6 @@ int mbnavadjust_write_project(int verbose, struct mbna_project *project,
   /* write mbgrdviz route file for all fixed crossings */
   snprintf(routefile, sizeof(mb_pathplusplus), "%s%s_fixedcrossing.rte", project->path, project->name);
   if ((hfp = fopen(routefile, "w")) == NULL) {
-    fclose(hfp);
     status = MB_FAILURE;
     *error = MB_ERROR_OPEN_FAIL;
     fprintf(stderr, " > Unable to open output fixed crossings route file %s\n", routefile);
@@ -2382,7 +2503,6 @@ int mbnavadjust_write_project(int verbose, struct mbna_project *project,
   /* write mbgrdviz route file for all unfixed ties */
   snprintf(routefile, sizeof(mb_pathplusplus), "%s%s_unfixedties.rte", project->path, project->name);
   if ((hfp = fopen(routefile, "w")) == NULL) {
-    fclose(hfp);
     status = MB_FAILURE;
     *error = MB_ERROR_OPEN_FAIL;
     fprintf(stderr, " > Unable to open output unfixed ties route file %s\n", routefile);
@@ -2449,7 +2569,6 @@ int mbnavadjust_write_project(int verbose, struct mbna_project *project,
   /* write mbgrdviz route file for all fixed ties */
   snprintf(routefile, sizeof(mb_pathplusplus), "%s%s_fixedties.rte", project->path, project->name);
   if ((hfp = fopen(routefile, "w")) == NULL) {
-    fclose(hfp);
     status = MB_FAILURE;
     *error = MB_ERROR_OPEN_FAIL;
     fprintf(stderr, " > Unable to open output fixed ties route file %s\n", routefile);
@@ -2701,6 +2820,9 @@ int mbnavadjust_remove_short_sections(int verbose, struct mbna_project *project,
         /* move remaining sections in file up by one */
         for (int jsection=isection; jsection < file->num_sections - 1; jsection++) {
           memcpy(&file->sections[jsection], &file->sections[jsection+1], sizeof(struct mbna_section));
+          /* the copied section keeps its old section_id - renumber it to
+              match its new (shifted-down) position */
+          file->sections[jsection].section_id = jsection;
 
           mb_path oldfile, newfile;
           
@@ -3173,8 +3295,20 @@ int mbnavadjust_remove_file_by_id(int verbose, struct mbna_project *project,
 
   /* delete the file */
   struct mbna_file *file = &project->files[ifile];
+  /* drop the global ties held by this file's sections before the section
+      array is freed, so the project's global tie counts stay accurate */
+  for (int isection = 0; isection < file->num_sections; isection++) {
+    if (file->sections[isection].globaltie.status != MBNA_TIE_NONE) {
+      project->num_globalties--;
+      project->num_globalties_analyzed--;
+    }
+  }
   if (file->num_sections_alloc > 0 && file->sections != NULL) {
-    status = mb_freed(verbose, __FILE__, __LINE__, (void **)&file->sections, error);
+    /* file->sections is allocated with raw malloc()/realloc(), not
+        mb_mallocd()/mb_reallocd(), so it must be freed with raw free() -
+        mb_freed() silently no-ops on a pointer it never allocated */
+    free(file->sections);
+    file->sections = NULL;
   }
   mb_pathplusplus deletefile, oldfile, newfile;
   snprintf(deletefile, sizeof(mb_path), "%s/nvs_%4.4d.mb166", project->datadir, ifile);
@@ -3205,6 +3339,11 @@ int mbnavadjust_remove_file_by_id(int verbose, struct mbna_project *project,
     project->files[jfile] = project->files[jfile+1];
     file = &project->files[jfile];
     file->id--;
+    /* sections carry their own file_id set when read/created; keep it in
+        sync with this file's new (shifted-down) index */
+    for (int ksection = 0; ksection < file->num_sections; ksection++) {
+      file->sections[ksection].file_id = jfile;
+    }
     snprintf(oldfile, sizeof(mb_path), "%s/nvs_%4.4d.mb166", project->datadir, jfile+1);
     snprintf(newfile, sizeof(mb_path), "%s/nvs_%4.4d.mb166", project->datadir, jfile);
     rename(oldfile, newfile);
@@ -4030,6 +4169,12 @@ int mbnavadjust_write_triangles(int verbose, struct mbna_project *project,
       if (status != MB_SUCCESS)
         *error = MB_ERROR_WRITE_FAIL;
     }
+    else {
+      /* fopen() failed - without this, a full/unwritable data directory
+          silently reports success while no .tri cache file is written */
+      status = MB_FAILURE;
+      *error = MB_ERROR_OPEN_FAIL;
+    }
   }
   else {
     status &= MB_FAILURE;
@@ -4152,12 +4297,22 @@ int mbnavadjust_section_load(int verbose, struct mbna_project *project,
 
       /* initialize data storage */
       status = mb_mallocd(verbose, __FILE__, __LINE__, sizeof(struct mbna_swathraw), (void **)swathraw_ptr, error);
+      if (status != MB_SUCCESS) {
+        fprintf(stderr, "\nMBIO Error allocating swathraw structure\n");
+        fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
+        exit(*error);
+      }
       swathraw = (struct mbna_swathraw *)*swathraw_ptr;
       swathraw->beams_bath = beams_bath;
       swathraw->npings_max = section->num_pings;
       swathraw->npings = 0;
       status = mb_mallocd(verbose, __FILE__, __LINE__, section->num_pings * sizeof(struct mbna_pingraw),
               (void **)&swathraw->pingraws, error);
+      if (status != MB_SUCCESS) {
+        fprintf(stderr, "\nMBIO Error allocating pingraws array\n");
+        fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
+        exit(*error);
+      }
       for (int i = 0; i < swathraw->npings_max; i++) {
         pingraw = &swathraw->pingraws[i];
         pingraw->beams_bath = 0;
@@ -5606,7 +5761,7 @@ int mbnavadjust_import_file(int verbose, struct mbna_project *project,
   return (status);
 }
 /*--------------------------------------------------------------------*/
-int mbnavadjust_reimport_file(int verbose, struct mbna_project *project,
+int mbnavadjust_update_file(int verbose, struct mbna_project *project,
             int ifile, int *error) {
   if (verbose >= 2) {
     fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
@@ -5617,7 +5772,7 @@ int mbnavadjust_reimport_file(int verbose, struct mbna_project *project,
 
   int status = MB_SUCCESS;
   char *error_message;
-  
+
   /* MBIO control parameters */
   const int pings = 1;
   const int lonflip = 0;
@@ -5629,7 +5784,7 @@ int mbnavadjust_reimport_file(int verbose, struct mbna_project *project,
   double speedmin = 0.0;
   double timegap = 1000000000.0;
 
-  /* mbio read and write values */
+  /* mbio read values - current processed file being read to obtain up to date beam flags */
   void *imbio_ptr = NULL;
   void *istore_ptr = NULL;
   int kind = MB_DATA_NONE;
@@ -5658,7 +5813,8 @@ int mbnavadjust_reimport_file(int verbose, struct mbna_project *project,
   double *ss = NULL;
   double *ssacrosstrack = NULL;
   double *ssalongtrack = NULL;
-	
+
+  /* mbio read/write values - existing project section data being updated with new flags */
   mb_path spath;
   void *smbio_ptr = NULL;
   void *sstore_ptr = NULL;
@@ -5697,24 +5853,26 @@ int mbnavadjust_reimport_file(int verbose, struct mbna_project *project,
   double beamwidth_ltrack = 0.0;
   bool beamwidths_set = false;
   int *bin_nbath = NULL;
-  double *bin_bath = NULL;
-  double *bin_bathacrosstrack = NULL;
-  double *bin_bathalongtrack = NULL;
   int side;
-  double port_time_d, stbd_time_d;
-  double angle, dt, alongtrackdistance, xtrackavg, xtrackmax;
+  double angle, xtrackavg, xtrackmax;
   int nxtrack;
+
+  /* section depth range accumulated from beams left valid after the flag update */
+  double section_depthmin = 0.0;
+  double section_depthmax = 0.0;
+  bool section_depth_set = false;
 
   mb_path ipath;
   int iformat;
-  int reimport_sections = 0;
-  int reimport_pings = 0;
-  double reimport_ping_maxtimediff = 100.0 * MB_ESF_MAXTIMEDIFF;
-  
+  int updated_sections = 0;
+  int updated_pings = 0;
+  int updated_flag_pings = 0;
+  double update_ping_maxtimediff = 100.0 * MB_ESF_MAXTIMEDIFF;
+
 
   /* if specified file id is valid for the project try to identify and open the current
   		processed data file, using the fbt file if possible */
-  bool reimport = false;
+  bool update = false;
   if (ifile >=  0 && ifile < project->num_files) {
 
     /* look for raw file first, then look for processed file and use if available */
@@ -5744,8 +5902,8 @@ int mbnavadjust_reimport_file(int verbose, struct mbna_project *project,
         strcpy(ipath, project->files[ifile].path);
       }
       iformat = project->files[ifile].format;
-      reimport = true;
-      
+      update = true;
+
       /* now check if the fbt file is available, and open it if possible */
       mb_path fbtpath;
       strncpy(fbtpath, ipath, sizeof(mb_path));
@@ -5757,12 +5915,12 @@ int mbnavadjust_reimport_file(int verbose, struct mbna_project *project,
 	  }
 	}
   }
-      
-	 /* if file can be reimported, do it */
-  if (reimport) {
+
+	 /* if the current processed file can be found and read, update beam flags from it */
+  if (update) {
 
     if (verbose > 0)
-      fprintf(stderr, "\n > Reimporting from format %d file: %s\n", iformat, ipath);
+      fprintf(stderr, "\n > Updating beam flags from format %d file: %s\n", iformat, ipath);
 
 	/* initialize reading the swath file */
 	*error = MB_ERROR_NO_ERROR;
@@ -5802,7 +5960,7 @@ int mbnavadjust_reimport_file(int verbose, struct mbna_project *project,
 	bool done = false;
 	if (*error != MB_ERROR_NO_ERROR) {
 	  done = true;
-	  reimport = false;
+	  update = false;
 	}
 		
 	/* loop over reading the current processed bathymetry */
@@ -5857,23 +6015,16 @@ int mbnavadjust_reimport_file(int verbose, struct mbna_project *project,
         int error_sensorhead = MB_ERROR_NO_ERROR;
         mb_sensorhead(verbose, imbio_ptr, istore_ptr, &sensorhead, &error_sensorhead);
 
-        /* if sonar is interferometric, bin the bathymetry */
+        /* if sonar is interferometric, bin the beam validity the same way section data was
+            binned into pseudo-beams at original import time, so that pseudo-beam indices
+            line up between this processed reading and the project's existing section pings */
         if (sonartype == MB_TOPOGRAPHY_TYPE_INTERFEROMETRIC) {
-          /* allocate bin arrays if needed */
+          /* allocate bin array if needed */
           if (bin_nbath == NULL) {
             status = mb_mallocd(verbose, __FILE__, __LINE__, project->bin_beams_bath * sizeof(int),
                     (void **)&bin_nbath, error);
-            status = mb_mallocd(verbose, __FILE__, __LINE__, project->bin_beams_bath * sizeof(double),
-                    (void **)&bin_bath, error);
-            status = mb_mallocd(verbose, __FILE__, __LINE__, project->bin_beams_bath * sizeof(double),
-                    (void **)&bin_bathacrosstrack, error);
-            status = mb_mallocd(verbose, __FILE__, __LINE__, project->bin_beams_bath * sizeof(double),
-                    (void **)&bin_bathalongtrack, error);
             for (int i = 0; i < project->bin_beams_bath; i++) {
               bin_nbath[i] = 0;
-              bin_bath[i] = 0.0;
-              bin_bathacrosstrack[i] = 0.0;
-              bin_bathalongtrack[i] = 0.0;
             }
           }
 
@@ -5893,76 +6044,43 @@ int mbnavadjust_reimport_file(int verbose, struct mbna_project *project,
           }
           if (xtrackavg > 0.25 * xtrackmax) {
             side = SIDE_STBD;
-            port_time_d = time_d;
           }
           else if (xtrackavg < -0.25 * xtrackmax) {
             side = SIDE_PORT;
-            stbd_time_d = time_d;
           }
           else {
             side = SIDE_FULLSWATH;
-            stbd_time_d = time_d;
           }
 
-          /* if side = PORT or FULLSWATH then initialize bin arrays */
+          /* if side = PORT or FULLSWATH then initialize bin array */
           if (side == SIDE_PORT || side == SIDE_FULLSWATH) {
             for (int i = 0; i < project->bin_beams_bath; i++) {
               bin_nbath[i] = 0;
-              bin_bath[i] = 0.0;
-              bin_bathacrosstrack[i] = 0.0;
-              bin_bathalongtrack[i] = 0.0;
             }
           }
 
-          /* bin the bathymetry */
+          /* bin the beam validity counts */
           for (int i = 0; i < beams_bath; i++) {
             if (mb_beam_ok(beamflag[i])) {
               /* get apparent acrosstrack beam angle and bin accordingly */
               angle = RTD * atan(bathacrosstrack[i] / (bath[i] - sensordepth));
               const int j = (int)floor((angle + 0.5 * project->bin_swathwidth + 0.5 * project->bin_pseudobeamwidth) /
                      project->bin_pseudobeamwidth);
-              /* fprintf(stderr,"i:%d bath:%f %f %f sensordepth:%f angle:%f j:%d\n",
-                 i,bath[i],bathacrosstrack[i],bathalongtrack[i],sensordepth,angle,j); */
               if (j >= 0 && j < project->bin_beams_bath) {
-                bin_bath[j] += bath[i];
-                bin_bathacrosstrack[j] += bathacrosstrack[i];
-                bin_bathalongtrack[j] += bathalongtrack[i];
                 bin_nbath[j]++;
               }
             }
           }
 
-          /* if side = STBD or FULLSWATH calculate output bathymetry
-              - add alongtrack offset to port data from previous ping */
+          /* if side = STBD or FULLSWATH calculate the output pseudo-beam flags */
           if (side == SIDE_STBD || side == SIDE_FULLSWATH) {
-            dt = port_time_d - stbd_time_d;
-            if (dt > 0.0 && dt < 0.5)
-              alongtrackdistance = -(port_time_d - stbd_time_d) * speed / 3.6;
-            else
-              alongtrackdistance = 0.0;
             beams_bath = project->bin_beams_bath;
             for (int j = 0; j < project->bin_beams_bath; j++) {
-              /* fprintf(stderr,"j:%d angle:%f n:%d bath:%f %f %f\n",
-                 j,j*project->bin_pseudobeamwidth - 0.5 *
-                 project->bin_swathwidth,bin_nbath[j],bin_bath[j],bin_bathacrosstrack[j],bin_bathalongtrack[j]); */
-              if (bin_nbath[j] > 0) {
-                bath[j] = bin_bath[j] / bin_nbath[j];
-                bathacrosstrack[j] = bin_bathacrosstrack[j] / bin_nbath[j];
-                bathalongtrack[j] = bin_bathalongtrack[j] / bin_nbath[j];
-                beamflag[j] = MB_FLAG_NONE;
-                if (bin_bathacrosstrack[j] < 0.0)
-                  bathalongtrack[j] += alongtrackdistance;
-              }
-              else {
-                beamflag[j] = MB_FLAG_NULL;
-                bath[j] = 0.0;
-                bathacrosstrack[j] = 0.0;
-                bathalongtrack[j] = 0.0;
-              }
+              beamflag[j] = (bin_nbath[j] > 0) ? MB_FLAG_NONE : MB_FLAG_NULL;
             }
           }
 
-          /* if side = PORT set nonfatal error so that bathymetry isn't output until
+          /* if side = PORT set nonfatal error so that flags aren't output until
               the STBD data are read too */
           else if (side == SIDE_PORT) {
             *error = MB_ERROR_IGNORE;
@@ -5998,18 +6116,25 @@ int mbnavadjust_reimport_file(int verbose, struct mbna_project *project,
 		  snprintf(opath, sizeof(mb_path), "%s/tmp_nvs_%4.4d_%4.4d.mb71", project->datadir, ifile, current_section);
 		  rename(opath, spath);
 		  status = mb_make_info(verbose, true, spath, MBF_MBLDEOIH, error);
-		  
+
+		  /* record the updated depth range for this section, if any valid beams remain */
+		  if (section_depth_set) {
+			struct mbna_section *depthsection = &project->files[ifile].sections[current_section];
+			depthsection->depthmin = section_depthmin;
+			depthsection->depthmax = section_depthmax;
+		  }
+
 		  if (verbose > 0) {
 			struct mbna_section *section = &project->files[ifile].sections[current_section];
-			fprintf(stderr, " > Reimport section %4.4d:%4.4d - pings updated and expected: %d %d\n", 
+			fprintf(stderr, " > Update section %4.4d:%4.4d - pings updated and expected: %d %d\n",
 				  ifile, current_section, current_section_num_pings, section->num_pings);
 		  }
-		  reimport_sections++;
-		  reimport_pings += current_section_num_pings;
+		  updated_sections++;
+		  updated_pings += current_section_num_pings;
 		  section_initialized = false;
 		  current_section_num_pings = 0;
         }
-        
+
         /* open new section if needed */
         if (!section_initialized && new_section >= 0) {
           /* open existing section file for reading */
@@ -6056,6 +6181,9 @@ int mbnavadjust_reimport_file(int verbose, struct mbna_project *project,
             section_initialized = true;
             current_section = new_section;
             section_saved = false;
+            section_depthmin = 0.0;
+            section_depthmax = 0.0;
+            section_depth_set = false;
 		  }
         }
 
@@ -6072,36 +6200,57 @@ int mbnavadjust_reimport_file(int verbose, struct mbna_project *project,
           }
               		
           if (status == MB_SUCCESS) {
-            /* write out the ping substituting the bathymetry arrays read from the current 
-               processed file for the arrays read from the existing section file, but only
-               after correcting for any change in sensordepth between the original section
-               and the current processed data */
-            if (fabs(stime_d - time_d) <= reimport_ping_maxtimediff) {
-              double sensordepthcorrection = ssensordepth - sensordepth;
-              for (int i = 0; i < beams_bath; i++) {
-                bath[i] += sensordepthcorrection;
+            /* update beam flags from the current processed data when timestamps match,
+               but always write out the section's own position, bathymetry, amplitude,
+               and sidescan values unchanged - only the flag byte may change */
+            const bool have_processed_match = (fabs(stime_d - time_d) <= update_ping_maxtimediff);
+            if (have_processed_match) {
+              if (beams_bath == sbeams_bath) {
+                /* only adjust beams that already carry real geometry in the section
+                   (sbath != 0) - beams with sbath == 0 are structural placeholders
+                   (never had a real sounding) and must stay MB_FLAG_NULL, since
+                   mbsys_ldeoih_insert() treats any non-null flag as "real data to
+                   scale and encode": marking a placeholder beam non-null would make
+                   it write a bogus scaled depth and can blow out the ping's whole
+                   depth_scale (as every null slot's implicit "depth" is -sensordepth) */
+                for (int i = 0; i < sbeams_bath; i++) {
+                  if (sbath[i] != 0.0) {
+                    sbeamflag[i] = beamflag[i];
+                  }
+                }
+                updated_flag_pings++;
               }
-			  /* write out data */
-			  status = mb_put_all(verbose, ombio_ptr, sstore_ptr,
-					  true, MB_DATA_DATA, stime_i, stime_d, snavlon, snavlat,
-					  sspeed, sheading, beams_bath, 0, 0,
-					  beamflag, bath, amp,
-					  bathacrosstrack, bathalongtrack,
-					  ss, ssacrosstrack, ssalongtrack, comment, error);
-			  if (status == MB_SUCCESS) {
-				current_section_num_pings++;
-			  }
-		    }
-		    
-		    /* if section timestamp later than processed file timestamp then save the section data */
-		    else if (stime_d > time_d) {
-		      section_saved = true;
-              fprintf(stderr, "%s:%d:%s: Skipped writing ping to section: status:%d timediff:%f\n", 
+              else {
+                fprintf(stderr, "Warning: beam count mismatch (processed:%d section:%d) at time %.3f"
+                        " - flags not updated for this ping\n", beams_bath, sbeams_bath, stime_d);
+              }
+            }
+
+            /* if section timestamp later than processed file timestamp then save the section
+               data and retry it against the next processed ping */
+            if (!have_processed_match && stime_d > time_d) {
+              section_saved = true;
+              fprintf(stderr, "%s:%d:%s: Skipped writing ping to section: status:%d timediff:%f\n",
             		__FILE__, __LINE__, __FUNCTION__, status, (stime_d - time_d));
 		    }
-		    
-		    /* if section timestamp earlier than processed file timestamp then write out the existing section data */
+
+		    /* otherwise write out the section ping now, with any updated flags */
 		    else {
+			  /* accumulate the depth range over beams left valid by the flag update */
+			  for (int i = 0; i < sbeams_bath; i++) {
+			    if (mb_beam_ok(sbeamflag[i]) && sbath[i] != 0.0) {
+			      if (!section_depth_set) {
+			        section_depthmin = sbath[i];
+			        section_depthmax = sbath[i];
+			        section_depth_set = true;
+			      }
+			      else {
+			        section_depthmin = MIN(section_depthmin, sbath[i]);
+			        section_depthmax = MAX(section_depthmax, sbath[i]);
+			      }
+			    }
+			  }
+
 			  /* write out data */
 			  status = mb_put_all(verbose, ombio_ptr, sstore_ptr,
 					  true, MB_DATA_DATA, stime_i, stime_d, snavlon, snavlat,
@@ -6114,7 +6263,7 @@ int mbnavadjust_reimport_file(int verbose, struct mbna_project *project,
 			  }
 		    }
           }
-          
+
           /* else write out ping from processed file */
           else {
             fprintf(stderr, "%s:%d:%s: Not writing ping to section because it is missing from the existing section file:\n", 
@@ -6142,36 +6291,67 @@ int mbnavadjust_reimport_file(int verbose, struct mbna_project *project,
 		snprintf(opath, sizeof(mb_path), "%s/tmp_nvs_%4.4d_%4.4d.mb71", project->datadir, ifile, current_section);
 		rename(opath, spath);
 		status = mb_make_info(verbose, true, spath, MBF_MBLDEOIH, error);
-		
+
+		/* record the updated depth range for this section, if any valid beams remain */
+		if (section_depth_set) {
+		  struct mbna_section *depthsection = &project->files[ifile].sections[current_section];
+		  depthsection->depthmin = section_depthmin;
+		  depthsection->depthmax = section_depthmax;
+		}
+
 		if (verbose > 0) {
           struct mbna_section *section = &project->files[ifile].sections[current_section];
-          fprintf(stderr, " > Reimport section %4.4d:%4.4d - pings updated and expected: %d %d\n", 
+          fprintf(stderr, " > Update section %4.4d:%4.4d - pings updated and expected: %d %d\n",
 				ifile, current_section, current_section_num_pings, section->num_pings);
 		}
-		reimport_sections++;
-		reimport_pings += current_section_num_pings;
+		updated_sections++;
+		updated_pings += current_section_num_pings;
 		section_initialized = false;
 		current_section_num_pings = 0;
 	  }
 	} /* loop over input data and variable done */
-	
-	/* close the file that was reimported */
+
+	/* close the file whose flags were being read for the update */
 	status = mb_close(verbose, &imbio_ptr, error);
+
+	/* deallocate the interferometric-sonar binning array, if it was used */
+	if (bin_nbath != NULL) {
+	  status = mb_freed(verbose, __FILE__, __LINE__, (void **)&bin_nbath, error);
+	}
+
+	/* the set of valid soundings may have changed, so recompute the coverage mask and
+	   regenerate the triangulated surface for every section of this file */
+	struct mbna_file *ufile = &project->files[ifile];
+	for (int isection = 0; isection < ufile->num_sections; isection++) {
+	  struct mbna_section *usection = &ufile->sections[isection];
+	  for (int i = 0; i < MBNA_MASK_DIM * MBNA_MASK_DIM; i++) {
+	    usection->coverage[i] = 0;
+	  }
+	  status = mbnavadjust_coverage_mask(verbose, project, ifile, isection, error);
+
+	  mb_pathplus trianglefile;
+	  snprintf(trianglefile, sizeof(mb_pathplus), "%s/nvs_%4.4d_%4.4d.mb71.tri", project->datadir, ifile, isection);
+	  remove(trianglefile);
+	  struct mbna_swathraw *swathraw = NULL;
+	  struct swath *swath = NULL;
+	  status = mbnavadjust_section_load(verbose, project, ifile, isection, (void **)&swathraw, (void **)&swath, error);
+	  status = mbnavadjust_section_unload(verbose, (void **)&swathraw, (void **)&swath, error);
+	}
 
 	if (verbose > 0) {
       mb_path message;
-      snprintf(message, sizeof(mb_path), " > Updated total %d pings in %d sections\n", 
-    			reimport_pings, reimport_sections);
+      snprintf(message, sizeof(mb_path), " > Updated beam flags in %d of %d pings across %d sections\n",
+    			updated_flag_pings, updated_pings, updated_sections);
       mbnavadjust_info_add(verbose, project, message, true, error);
 	}
-  } /* reimport */
-  
-  /* file cannot be reimported */
+  } /* update */
+
+  /* file's current processed version cannot be found and read, so flags cannot be updated */
   else {
     *error = MB_ERROR_BAD_DATA;
     status = MB_FAILURE;
     mb_pathplus message;
-    snprintf(message, sizeof(mb_pathplus), "Unable to reimport format %d file: %s\n", iformat, ipath);
+    snprintf(message, sizeof(mb_pathplus), "Unable to update beam flags for format %d file: %s\n", iformat, ipath);
     mbnavadjust_info_add(verbose, project, message, true, error);
   }
 
@@ -6406,7 +6586,8 @@ int mbnavadjust_reference_load(int verbose, struct mbna_project *project, int re
     fprintf(stderr, "dbg2       project->datadir:                       %s\n", project->datadir);
     fprintf(stderr, "dbg2       project->refgrid_status:                %d\n", project->refgrid_status);
     fprintf(stderr, "dbg2       refgrid_select:                         %d\n", refgrid_select);
-    fprintf(stderr, "dbg2       project->refgrid_names[refgrid_select]: %s\n", project->refgrid_names[project->refgrid_select]);
+    if (refgrid_select >= 0 && refgrid_select < project->num_refgrids)
+      fprintf(stderr, "dbg2       project->refgrid_names[refgrid_select]: %s\n", project->refgrid_names[refgrid_select]);
     fprintf(stderr, "dbg2       section:                                %p\n", section);
     fprintf(stderr, "dbg2       swath_ptr:                              %p  %p\n", swath_ptr, *swath_ptr);
   }
@@ -6423,7 +6604,7 @@ int mbnavadjust_reference_load(int verbose, struct mbna_project *project, int re
   }
 
   /* load reference grid if needed */
-  if (project->num_refgrids > 0 && refgrid_select < project->num_refgrids) {
+  if (project->num_refgrids > 0 && refgrid_select >= 0 && refgrid_select < project->num_refgrids) {
     mb_pathplusplus path;
     int grid_projection_mode;
     int nxy;
@@ -7029,8 +7210,8 @@ int mbnavadjust_addcrossing(int verbose, struct mbna_project *project, int ifile
       struct mbna_crossing *crossing = (struct mbna_crossing *)&project->crossings[icrossing];
       if ((ifile1 == crossing->file_id_1 && isection1 == crossing->section_1 && ifile2 == crossing->file_id_2 &&
            isection2 == crossing->section_2) ||
-          (ifile1 == crossing->file_id_1 && isection1 == crossing->section_1 && ifile2 == crossing->file_id_2 &&
-           isection2 == crossing->section_2))
+          (ifile1 == crossing->file_id_2 && isection1 == crossing->section_2 && ifile2 == crossing->file_id_1 &&
+           isection2 == crossing->section_1))
         disqualify = true;
     }
   }
@@ -7210,18 +7391,24 @@ int mbnavadjust_tie_compare(const void *a, const void *b) {
   struct mbna_tie *tie_a = *((struct mbna_tie **)a);
   struct mbna_tie *tie_b = *((struct mbna_tie **)b);
 
+  const bool a_valid = tie_a->inversion_status != MBNA_INVERSION_NONE;
+  const bool b_valid = tie_b->inversion_status != MBNA_INVERSION_NONE;
+
   /* return according to the misfit magnitude */
-  if (tie_a->inversion_status != MBNA_INVERSION_NONE
-      && tie_b->inversion_status != MBNA_INVERSION_NONE) {
+  if (a_valid && b_valid) {
     if (tie_a->sigma_m > tie_b->sigma_m) {
       return(1);
-    } else {
+    } else if (tie_a->sigma_m < tie_b->sigma_m) {
       return(-1);
+    } else {
+      return(0);
     }
-  } else if (tie_a->inversion_status != MBNA_INVERSION_NONE) {
+  } else if (a_valid && !b_valid) {
     return(1);
-  } else {
+  } else if (!a_valid && b_valid) {
     return(-1);
+  } else {
+    return(0);
   }
 }
 /*--------------------------------------------------------------------*/
@@ -7232,18 +7419,24 @@ int mbnavadjust_globaltie_compare(const void *a, const void *b) {
   struct mbna_section *section_a = *((struct mbna_section **)a);
   struct mbna_section *section_b = *((struct mbna_section **)b);
 
+  const bool a_valid = section_a->globaltie.inversion_status != MBNA_INVERSION_NONE;
+  const bool b_valid = section_b->globaltie.inversion_status != MBNA_INVERSION_NONE;
+
   /* return according to the misfit magnitude */
-  if (section_a->globaltie.inversion_status != MBNA_INVERSION_NONE
-      && section_b->globaltie.inversion_status != MBNA_INVERSION_NONE) {
+  if (a_valid && b_valid) {
     if (section_a->globaltie.sigma_m > section_b->globaltie.sigma_m) {
       return(1);
-    } else {
+    } else if (section_a->globaltie.sigma_m < section_b->globaltie.sigma_m) {
       return(-1);
+    } else {
+      return(0);
     }
-  } else if (section_a->globaltie.inversion_status != MBNA_INVERSION_NONE) {
+  } else if (a_valid && !b_valid) {
     return(1);
-  } else {
+  } else if (!a_valid && b_valid) {
     return(-1);
+  } else {
+    return(0);
   }
 }
 

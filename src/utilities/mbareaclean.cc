@@ -116,8 +116,20 @@ struct mbareaclean_sndg_struct *sndg = nullptr;
 constexpr char program_name[] = "MBAREACLEAN";
 constexpr char help_message[] = "MBAREACLEAN identifies and flags artifacts in swath bathymetry data";
 constexpr char usage_message[] =
-    "mbareaclean [-Fformat -Iinfile -Rwest/east/south/north -B -G -Sbinsize\n"
-    "\t -Mthreshold/nmin -Dthreshold[/nmin[/nmax]] -Ttype -N[-]minbeam/maxbeam]";
+    "mbareaclean\n"
+    "\t--beam-range=[-]minbeam[/maxbeam] {-N[-]minbeam[/maxbeam]}\n"
+    "\t--bin-size=binsize {-Sbinsize}\n"
+    "\t--bounds=west/east/south/north {-Rwest/east/south/north}\n"
+    "\t--detection-type=type {-Ttype}\n"
+    "\t--flag-bad {-B}\n"
+    "\t--format=format {-Fformat}\n"
+    "\t--help {-H}\n"
+    "\t--input=infile {-Iinfile}\n"
+    "\t--median-filter=threshold[/nmin[/nmax]] {-Mthreshold[/nmin[/nmax]]}\n"
+    "\t--plane-fit=arg {-Parg}\n"
+    "\t--std-dev-filter=threshold[/nmin] {-Dthreshold[/nmin]}\n"
+    "\t--unflag-good {-G}\n"
+    "\t--verbose {-V}\n\n";
 
 /*--------------------------------------------------------------------*/
 int getsoundingptr(int verbose, int soundingid, struct mbareaclean_sndg_struct **sndgptr, int *error) {
@@ -261,12 +273,97 @@ int main(int argc, char **argv) {
 	bool use_detect = false;
 
 	{
+		static struct option options[] = {{"verbose", no_argument, nullptr, 0},
+		                                  {"help", no_argument, nullptr, 0},
+		                                  {"beam-range", required_argument, nullptr, 0},
+		                                  {"bin-size", required_argument, nullptr, 0},
+		                                  {"bounds", required_argument, nullptr, 0},
+		                                  {"detection-type", required_argument, nullptr, 0},
+		                                  {"flag-bad", no_argument, nullptr, 0},
+		                                  {"format", required_argument, nullptr, 0},
+		                                  {"input", required_argument, nullptr, 0},
+		                                  {"median-filter", required_argument, nullptr, 0},
+		                                  {"plane-fit", required_argument, nullptr, 0},
+		                                  {"std-dev-filter", required_argument, nullptr, 0},
+		                                  {"unflag-good", no_argument, nullptr, 0},
+		                                  {nullptr, 0, nullptr, 0}};
+
 		bool errflg = false;
 		int c;
+		int option_index;
 		bool help = false;
-		while ((c = getopt(argc, argv, "VvHhBbGgD:d:F:f:I:i:M:m:N:n:P:p:S:sT:t::R:r:")) != -1)
+		while ((c = getopt_long(argc, argv, "VvHhBbGgD:d:F:f:I:i:M:m:N:n:P:p:S:sT:t::R:r:", options, &option_index)) != -1)
 		{
 			switch (c) {
+			case 0:
+				if (strcmp("verbose", options[option_index].name) == 0) {
+					verbose++;
+				}
+				else if (strcmp("help", options[option_index].name) == 0) {
+					help = true;
+				}
+				else if (strcmp("beam-range", options[option_index].name) == 0) {
+					limit_beams = true;
+					sscanf(optarg, "%d/%d", &min_beam, &max_beam_no);
+					if (optarg[0] == '-') {
+						min_beam = -min_beam;
+						beam_in = false;
+					}
+					if (max_beam_no < 0)
+						max_beam_no = -max_beam_no;
+					max_beam = max_beam_no;
+					if (max_beam < min_beam)
+						max_beam = min_beam;
+				}
+				else if (strcmp("bin-size", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf", &binsize);
+					binsizeset = true;
+				}
+				else if (strcmp("bounds", options[option_index].name) == 0) {
+					mb_get_bounds(optarg, areabounds);
+					areaboundsset = true;
+				}
+				else if (strcmp("detection-type", options[option_index].name) == 0) {
+					use_detect = true;
+					sscanf(optarg, "%d", &flag_detect);
+				}
+				else if (strcmp("flag-bad", options[option_index].name) == 0) {
+					output_bad = true;
+				}
+				else if (strcmp("format", options[option_index].name) == 0) {
+					sscanf(optarg, "%d", &format);
+				}
+				else if (strcmp("input", options[option_index].name) == 0) {
+					sscanf(optarg, "%1023s", read_file);
+				}
+				else if (strcmp("median-filter", options[option_index].name) == 0) {
+					median_filter = true;
+					double d1;
+					int i1;
+					int i2;
+					const int n = sscanf(optarg, "%lf/%d/%d", &d1, &i1, &i2);
+					if (n > 0)
+						median_filter_threshold = d1;
+					if (n > 1)
+						median_filter_nmin = i1;
+					if (n > 2) {
+						mediandensity_filter = true;
+						mediandensity_filter_nmax = i2;
+					}
+				}
+				else if (strcmp("plane-fit", options[option_index].name) == 0) {
+					// TODO(schwehr): -p not in the man page.
+					plane_fit = true;
+				}
+				else if (strcmp("std-dev-filter", options[option_index].name) == 0) {
+					std_dev_filter = true;
+					sscanf(optarg, "%lf/%d", &std_dev_threshold, &std_dev_nmin);
+				}
+				else if (strcmp("unflag-good", options[option_index].name) == 0) {
+					output_good = true;
+				}
+				break;
+
 			case 'H':
 			case 'h':
 				help = true;
@@ -1200,10 +1297,10 @@ int main(int argc, char **argv) {
 	mb_freed(verbose, __FILE__, __LINE__, (void **)&gsndgnum_alloc, &error);
 
 	for (int i = 0; i < nfile; i++) {
-		mb_freed(verbose, __FILE__, __LINE__, (void **)&(files[nfile - 1].ping_time_d), &error);
-		mb_freed(verbose, __FILE__, __LINE__, (void **)&(files[nfile - 1].pingmultiplicity), &error);
-		mb_freed(verbose, __FILE__, __LINE__, (void **)&(files[nfile - 1].ping_altitude), &error);
-		mb_freed(verbose, __FILE__, __LINE__, (void **)&(files[nfile - 1].sndg), &error);
+		mb_freed(verbose, __FILE__, __LINE__, (void **)&(files[i].ping_time_d), &error);
+		mb_freed(verbose, __FILE__, __LINE__, (void **)&(files[i].pingmultiplicity), &error);
+		mb_freed(verbose, __FILE__, __LINE__, (void **)&(files[i].ping_altitude), &error);
+		mb_freed(verbose, __FILE__, __LINE__, (void **)&(files[i].sndg), &error);
 	}
 	mb_freed(verbose, __FILE__, __LINE__, (void **)&files, &error);
 

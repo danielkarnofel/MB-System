@@ -109,8 +109,12 @@ Cursor myCursor;
 
 /* Set these to the dimensions of your canvas drawing */
 /* areas, minus 1, located in the uil file       */
-static int cont_borders[4] = {0, 600, 0, 600};
-static int corr_borders[4] = {0, 301, 0, 301};
+/* local_cont_borders/local_corr_borders hold the widget-derived canvas
+    dimensions just long enough to seed the shared cont_borders/corr_borders
+    (declared in mbnavadjust_core.h) via mbnavadjust_set_borders() below;
+    named distinctly from the shared globals to avoid colliding with them. */
+static int local_cont_borders[4] = {0, 600, 0, 600};
+static int local_corr_borders[4] = {0, 301, 0, 301};
 static int zoff_borders[4] = {0, 300, 0, 60};
 static int modp_borders[4];
 
@@ -594,7 +598,7 @@ void do_mbnavadjust_init(int argc, char **argv) {
 	mpixel_values[j] = screen_color.pixel;
 
   status = mbnavadjust_set_colors(MB_NDrawingColors + 16 * 5 + 1, (int *)mpixel_values);
-  status = mbnavadjust_set_borders(cont_borders, corr_borders, zoff_borders);
+  status = mbnavadjust_set_borders(local_cont_borders, local_corr_borders, zoff_borders);
 
   /* set verbose */
   mbna_verbose = 0;
@@ -764,7 +768,6 @@ void do_update_status() {
     if (mbna_verbose > 0)
       fprintf(stderr, "%s\n", string);
     if (project.num_surveys > 0 && project.num_files > 0) {
-    	int num_surveys_listed = 0;
       XmString *xstr = (XmString *)malloc(project.num_surveys * sizeof(XmString));
     	for (int isurvey = 0; isurvey < project.num_surveys; isurvey++) {
     		int num_files_survey = 0;
@@ -792,6 +795,7 @@ void do_update_status() {
 							else
 								filestatus = filestatus_unknown;
 						}
+						num_files_survey++;
 						etime_d = file->sections[file->num_sections-1].etime_d;
 						for (int isection=0; isection < file->num_sections; isection++) {
 							struct mbna_section *section = &file->sections[isection];
@@ -954,6 +958,7 @@ fprintf(stderr, "%s:%d:%s: \n", __FILE__, __LINE__, __FUNCTION__);
         struct mbna_file *file = &(project.files[i]);
         if ((mbna_view_mode == MBNA_VIEW_MODE_ALL) ||
             (mbna_view_mode == MBNA_VIEW_MODE_SURVEY && mbna_survey_select == file->survey) ||
+            (mbna_view_mode == MBNA_VIEW_MODE_BLOCK && (mbna_survey_select1 == file->survey || mbna_survey_select2 == file->survey)) ||
             (mbna_view_mode == MBNA_VIEW_MODE_FILE) ||
             (mbna_view_mode == MBNA_VIEW_MODE_WITHSURVEY && mbna_survey_select == file->survey) ||
             (mbna_view_mode == MBNA_VIEW_MODE_WITHFILE) || (mbna_view_mode == MBNA_VIEW_MODE_WITHSECTION))
@@ -1040,6 +1045,7 @@ fprintf(stderr, "%s:%d:%s: \n", __FILE__, __LINE__, __FUNCTION__);
         for (int j = 0; j < file->num_sections; j++) {
           if ((mbna_view_mode == MBNA_VIEW_MODE_ALL) ||
               (mbna_view_mode == MBNA_VIEW_MODE_SURVEY && mbna_survey_select == file->survey) ||
+              (mbna_view_mode == MBNA_VIEW_MODE_BLOCK && (mbna_survey_select1 == file->survey || mbna_survey_select2 == file->survey)) ||
               (mbna_view_mode == MBNA_VIEW_MODE_FILE && mbna_file_select == i) ||
               (mbna_view_mode == MBNA_VIEW_MODE_WITHSURVEY && mbna_survey_select == file->survey) ||
               (mbna_view_mode == MBNA_VIEW_MODE_WITHFILE && mbna_file_select == i) ||
@@ -1059,6 +1065,7 @@ fprintf(stderr, "%s:%d:%s: \n", __FILE__, __LINE__, __FUNCTION__);
           struct mbna_section *section = &(file->sections[j]);
           if ((mbna_view_mode == MBNA_VIEW_MODE_ALL) ||
               (mbna_view_mode == MBNA_VIEW_MODE_SURVEY && mbna_survey_select == file->survey) ||
+              (mbna_view_mode == MBNA_VIEW_MODE_BLOCK && (mbna_survey_select1 == file->survey || mbna_survey_select2 == file->survey)) ||
               (mbna_view_mode == MBNA_VIEW_MODE_FILE && mbna_file_select == i) ||
               (mbna_view_mode == MBNA_VIEW_MODE_WITHSURVEY && mbna_survey_select == file->survey) ||
               (mbna_view_mode == MBNA_VIEW_MODE_WITHFILE && mbna_file_select == i) ||
@@ -3021,17 +3028,18 @@ void do_list_data_select(Widget w, XtPointer client_data, XtPointer call_data) {
       project.modelplot_uptodate = false;
     }
     else if (mbna_view_list == MBNA_VIEW_LIST_BLOCKS) {
-    	if (acs->item != NULL) {
-    		tmp = (char *)XmStringUnparse(acs->item, NULL, XmCHARSET_TEXT, XmCHARSET_TEXT, NULL, 0, XmOUTPUT_ALL);
-    		if (tmp == NULL && acs->selected_items != NULL) {
-    			tmp = (char *)XmStringUnparse(acs->selected_items[0], NULL, XmCHARSET_TEXT, XmCHARSET_TEXT, NULL, 0, XmOUTPUT_ALL);
-    		}
-    		if (tmp != NULL) {
-        	strncpy(selected_item, tmp, sizeof(selected_item));
-        	XtFree(tmp);
-        	tmp = NULL;
-    		}
-    	}
+      memset(selected_item, 0, sizeof(selected_item));
+      if (acs->item != NULL) {
+        tmp = (char *)XmStringUnparse(acs->item, NULL, XmCHARSET_TEXT, XmCHARSET_TEXT, NULL, 0, XmOUTPUT_ALL);
+      }
+      if (tmp == NULL && acs->selected_items != NULL) {
+        tmp = (char *)XmStringUnparse(acs->selected_items[0], NULL, XmCHARSET_TEXT, XmCHARSET_TEXT, NULL, 0, XmOUTPUT_ALL);
+      }
+      if (tmp != NULL) {
+        strncpy(selected_item, tmp, sizeof(selected_item) - 1);
+        XtFree(tmp);
+        tmp = NULL;
+      }
       int iblock_select, isurvey1, isurvey2, d1, d2, d3, d4, d5;
       const int nscan = sscanf(selected_item, "block %d: Survey %d vs Survey %d : Crossings: %d %d %d %d : Ties: %d",
              &iblock_select, &isurvey1, &isurvey2, &d1, &d2, &d3, &d4, &d5);
@@ -3040,7 +3048,6 @@ void do_list_data_select(Widget w, XtPointer client_data, XtPointer call_data) {
         mbna_survey_select1 = isurvey1;
         mbna_survey_select2 = isurvey2;
       }
-      // fprintf(stderr,"mbna_survey_select:%d:%d:%d\n",mbna_survey_select,mbna_survey_select1,mbna_survey_select2);
       project.modelplot_uptodate = false;
     }
     else if (mbna_view_list == MBNA_VIEW_LIST_FILES) {
@@ -3072,6 +3079,7 @@ void do_list_data_select(Widget w, XtPointer client_data, XtPointer call_data) {
         for (int j = 0; j < file->num_sections; j++) {
           if ((mbna_view_mode == MBNA_VIEW_MODE_ALL) ||
               (mbna_view_mode == MBNA_VIEW_MODE_SURVEY && mbna_survey_select == file->survey) ||
+              (mbna_view_mode == MBNA_VIEW_MODE_BLOCK && (mbna_survey_select1 == file->survey || mbna_survey_select2 == file->survey)) ||
               (mbna_view_mode == MBNA_VIEW_MODE_FILE && mbna_file_select == i) ||
               (mbna_view_mode == MBNA_VIEW_MODE_WITHSURVEY && mbna_survey_select == file->survey) ||
               (mbna_view_mode == MBNA_VIEW_MODE_WITHFILE && mbna_file_select == i) ||
@@ -3969,9 +3977,10 @@ void do_naverr_selecttie(Widget w, XtPointer client_data, XtPointer call_data) {
     do_update_modelplot_status();
     mbnavadjust_modelplot_plot(__FILE__, __LINE__);
   }
-  if (project.visualization_status)
+  if (project.visualization_status) {
     mbnavadjust_reset_visualization_navties();
     do_update_visualization_status();
+  }
 }
 
 /*--------------------------------------------------------------------*/
@@ -4112,14 +4121,19 @@ void do_naverr_dismiss(Widget w, XtPointer client_data, XtPointer call_data) {
   if (mbna_naverr_mode != MBNA_NAVERR_MODE_UNLOADED) {
     status = mbnavadjust_crossing_unload();
     status = mbnavadjust_referencegrid_unload();
+
+    /* deallocate graphics (only allocated when a crossing was actually
+        loaded - matches the guard already used in do_quit(); freeing these
+        unconditionally double-frees cont_gc/corr_gc whenever dismiss is
+        invoked with no crossing loaded, e.g. immediately after clearing
+        all ties, crashing in XFreeGC/_XFreeExtData) */
+    XFreeGC(display, cont_gc);
+    XFreeGC(display, corr_gc);
+    xg_free(cont_xgid);
+    xg_free(corr_xgid);
   }
 
-  /* deallocate graphics */
   mbna_status = MBNA_STATUS_GUI;
-  XFreeGC(display, cont_gc);
-  XFreeGC(display, corr_gc);
-  xg_free(cont_xgid);
-  xg_free(corr_xgid);
   mbna_current_crossing = MBV_SELECT_NONE;
   mbna_current_tie = MBV_SELECT_NONE;
   mbna_current_file = MBV_SELECT_NONE;
@@ -4133,9 +4147,10 @@ void do_naverr_dismiss(Widget w, XtPointer client_data, XtPointer call_data) {
     do_update_modelplot_status();
     mbnavadjust_modelplot_plot(__FILE__, __LINE__);
   }
-  if (project.visualization_status)
+  if (project.visualization_status) {
     mbnavadjust_reset_visualization_navties();
     do_update_visualization_status();
+  }
 }
 
 /*--------------------------------------------------------------------*/
@@ -4433,9 +4448,10 @@ void do_biases_applyall(Widget w, XtPointer client_data, XtPointer call_data) {
     do_update_modelplot_status();
     mbnavadjust_modelplot_plot(__FILE__, __LINE__);
   }
-  if (project.visualization_status)
+  if (project.visualization_status) {
     mbnavadjust_reset_visualization_navties();
     do_update_visualization_status();
+  }
 }
 
 /*--------------------------------------------------------------------*/
@@ -4914,9 +4930,10 @@ void do_file_close(Widget w, XtPointer client_data, XtPointer call_data) {
     do_update_modelplot_status();
     mbnavadjust_modelplot_plot(__FILE__, __LINE__);
   }
-  if (project.visualization_status)
+  if (project.visualization_status) {
     mbnavadjust_reset_visualization_navties();
     do_update_visualization_status();
+  }
 }
 
 /*--------------------------------------------------------------------*/
@@ -5034,7 +5051,10 @@ void do_fileselection_ok(Widget w, XtPointer client_data, XtPointer call_data) {
 
     /* update datalist files and topography grids */
     mbna_status = MBNA_STATUS_NAVSOLVE;
-    mbnavadjust_updategrid();
+    snprintf(message, sizeof(message), "Updating bathymetry grids...");
+    do_message_on(message);
+    mbnavadjust_updategrid(mbna_verbose, &project);
+    do_message_off();
     mbna_status = MBNA_STATUS_GUI;
     do_update_status();
     if (project.modelplot) {
@@ -5771,15 +5791,30 @@ void do_action_tie_fixed(Widget w, XtPointer client_data, XtPointer call_data) {
 }
 /*--------------------------------------------------------------------*/
 
+/* called by mbnavadjust_autopick() every tenth crossing it processes, so
+    the crossing/section/tie list display and model plot (if open) do not
+    sit unrefreshed for the whole duration of a long autopick run */
+static void do_action_autopick_progress(void) {
+  do_update_status();
+  XmUpdateDisplay(list_data);
+  if (project.modelplot) {
+    do_update_modelplot_status();
+    mbnavadjust_modelplot_plot(__FILE__, __LINE__);
+  }
+}
+
 void do_action_autopick(Widget w, XtPointer client_data, XtPointer call_data) {
   (void)w; // Unused parameter
   (void)client_data; // Unused parameter
   (void)call_data; // Unused parameter
 
   // XmAnyCallbackStruct *acs = (XmAnyCallbackStruct *)call_data;
+  int error = MB_ERROR_NO_ERROR;
 
   mbna_status = MBNA_STATUS_AUTOPICK;
-  mbnavadjust_autopick(true);
+  mbnavadjust_autopick(mbna_verbose, &project, mbna_view_list, mbna_view_mode, mbna_survey_select, mbna_survey_select1,
+                       mbna_survey_select2, mbna_file_select, mbna_section_select, MBNA_MEDIOCREOVERLAP_THRESHOLD,
+                       true, do_action_autopick_progress, &error);
   mbna_status = MBNA_STATUS_GUI;
   do_update_status();
   if (project.modelplot) {
@@ -5799,9 +5834,12 @@ void do_action_autopickhorizontal(Widget w, XtPointer client_data, XtPointer cal
   (void)call_data; // Unused parameter
 
   // XmAnyCallbackStruct *acs = (XmAnyCallbackStruct *)call_data;
+  int error = MB_ERROR_NO_ERROR;
 
   mbna_status = MBNA_STATUS_AUTOPICK;
-  mbnavadjust_autopick(false);
+  mbnavadjust_autopick(mbna_verbose, &project, mbna_view_list, mbna_view_mode, mbna_survey_select, mbna_survey_select1,
+                       mbna_survey_select2, mbna_file_select, mbna_section_select, MBNA_MEDIOCREOVERLAP_THRESHOLD,
+                       false, do_action_autopick_progress, &error);
   mbna_status = MBNA_STATUS_GUI;
   do_update_status();
   if (project.modelplot) {
@@ -5928,9 +5966,13 @@ void do_action_invertnav(Widget w, XtPointer client_data, XtPointer call_data) {
   (void)call_data; // Unused parameter
 
   // XmAnyCallbackStruct *acs = (XmAnyCallbackStruct *)call_data;
+  mb_pathplus message;
 
   mbna_status = MBNA_STATUS_NAVSOLVE;
-  mbnavadjust_invertnav();
+  snprintf(message, sizeof(message), "Inverting for navigation adjustment model...");
+  do_message_on(message);
+  mbnavadjust_invertnav(mbna_verbose, &project);
+  do_message_off();
   mbna_status = MBNA_STATUS_GUI;
   do_update_status();
   if (project.modelplot) {
@@ -5951,9 +5993,13 @@ void do_action_updategrids(Widget w, XtPointer client_data, XtPointer call_data)
   (void)call_data; // Unused parameter
 
   // XmAnyCallbackStruct *acs = (XmAnyCallbackStruct *)call_data;
+  mb_pathplus message;
 
   mbna_status = MBNA_STATUS_NAVSOLVE;
-  mbnavadjust_updategrid();
+  snprintf(message, sizeof(message), "Updating bathymetry grids...");
+  do_message_on(message);
+  mbnavadjust_updategrid(mbna_verbose, &project);
+  do_message_off();
   mbna_status = MBNA_STATUS_GUI;
   do_update_status();
 //  if (project.modelplot) {
@@ -5974,7 +6020,11 @@ void do_apply_nav(Widget w, XtPointer client_data, XtPointer call_data) {
   (void)call_data; // Unused parameter
 
   // XmAnyCallbackStruct *acs = (XmAnyCallbackStruct *)call_data;
-  mbnavadjust_applynav();
+  mb_pathplus message;
+  snprintf(message, sizeof(message), "Applying adjusted navigation...");
+  do_message_on(message);
+  mbnavadjust_applynav(mbna_verbose, &project);
+  do_message_off();
   do_update_status();
 }
 
@@ -6757,6 +6807,28 @@ int do_message_on(char *message) {
 
   set_label_string(label_message, message);
   XtManageChild(bulletinBoard_message);
+
+  /* Wait for the message dialog to actually become mapped and viewable
+      before returning, mirroring the wait loop already used for the main
+      window at startup in do_wait_until_viewed(). XSync()/XmUpdateDisplay()
+      alone do not guarantee this the first time the dialog is shown in a
+      session: the window manager's own mapping sequence can lag behind the
+      XtManageChild() request above, and every caller of this function
+      starts a long blocking operation immediately afterward - without this
+      wait, the dialog's initial paint could remain undispatched (showing
+      an empty box with no text) for the entire duration of that
+      operation. */
+  Widget shell = XtParent(bulletinBoard_message);
+  if (XtIsRealized(shell)) {
+    Window shellwindow = XtWindow(shell);
+    XWindowAttributes xwa;
+    XEvent event;
+    while (XGetWindowAttributes(XtDisplay(shell), shellwindow, &xwa) && xwa.map_state != IsViewable) {
+      XtAppNextEvent(app_context, &event);
+      XtDispatchEvent(&event);
+    }
+  }
+
   XSync(XtDisplay(bulletinBoard_message), 0);
   XmUpdateDisplay(bulletinBoard_message);
 

@@ -57,7 +57,11 @@ constexpr char help_message[] =
     "calendar time. The output time (in the form not specified as input) is\n"
     "written to stdout.";
 constexpr char usage_message[] =
-    "mbtime [-Mtime_d -Tyear/month/day/hour/minute/second -V -H]";
+    "mbtime [-Mtime_d -Tyear/month/day/hour/minute/second -V -H]\n"
+    "\t--calendar-time=year/month/day/hour/minute/second {-Tyear/month/day/hour/minute/second}\n"
+    "\t--epoch-time=time_d {-Mtime_d}\n"
+    "\t--help {-H}\n"
+    "\t--verbose {-V}\n";
 
 /*--------------------------------------------------------------------*/
 
@@ -70,11 +74,37 @@ int main(int argc, char **argv) {
 
 	/* process argument list */
 	{
+		static struct option options[] = {{"verbose", no_argument, nullptr, 0},
+		                                  {"help", no_argument, nullptr, 0},
+		                                  {"epoch-time", required_argument, nullptr, 0},
+		                                  {"calendar-time", required_argument, nullptr, 0},
+		                                  {nullptr, 0, nullptr, 0}};
+
+		int option_index;
 		bool errflg = false;
 		int c;
 		bool help = false;
-		while ((c = getopt(argc, argv, "VvHhM:m:T:t:")) != -1)
+		while ((c = getopt_long(argc, argv, "VvHhM:m:T:t:", options, &option_index)) != -1)
 			switch (c) {
+			/* long options all return c=0 */
+			case 0:
+				if (strcmp("verbose", options[option_index].name) == 0) {
+					verbose++;
+				}
+				else if (strcmp("help", options[option_index].name) == 0) {
+					help = true;
+				}
+				else if (strcmp("epoch-time", options[option_index].name) == 0) {
+					sscanf(optarg, "%lf", &time_d);
+					mode = MBTIME_INPUT_EPOCH;
+				}
+				else if (strcmp("calendar-time", options[option_index].name) == 0) {
+					sscanf(optarg, "%d/%d/%d/%d/%d/%lf", &time_i[0], &time_i[1], &time_i[2], &time_i[3], &time_i[4], &seconds);
+					time_i[5] = (int)seconds;
+					time_i[6] = (int)(1000000 * (seconds - time_i[5]));
+					mode = MBTIME_INPUT_CALENDAR;
+				}
+				break;
 			case 'H':
 			case 'h':
 				help = true;

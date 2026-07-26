@@ -1,79 +1,93 @@
 #include "algorithms/normal_estimation.h"
 
-#include "math/eigen.h"
-#include "math/kdtree.h"
-#include "math/mat3.h"
+Vec3 direction_to_origin(CollectedPoint collected_point) {
+    const Vec3 direction = collected_point.origin - collected_point.point;
+    if (direction.length_squared() < vec3_epsilon * vec3_epsilon) {
+        return  Vec3(0.0, 0.0, 1.0);
+    } else {
+        return normalize(direction);
+    }
+}
 
-#include <cstddef>
-#include <vector>
+OrientedPointCloud normal_estimation(
+    const CollectedPointCloud &collected_points, 
+    NormalEstimationOptions options
+) {
 
-std::vector<OrientedPoint> estimate_normals_pca(const std::vector<Vec3> &points, int k) {
-    std::vector<OrientedPoint> oriented_points;
-    oriented_points.reserve(points.size());
+    OrientedPointCloud oriented_points;
+    oriented_points.reserve(collected_points.size());
 
-    const std::size_t neighbor_count = k > 0 ? static_cast<std::size_t>(k) : 0;
+    // Extract the points from the CollectedPoint struct for use with the
+    // KDTree. Ideally the KDTree data structure would accept an accessor 
+    // function so that arbitrary point collections can be passed in without 
+    // copying
+    std::vector<Vec3> points;
+    points.reserve(collected_points.size());
+    for (const CollectedPoint &collected_point : collected_points) {
+        points.push_back(collected_point.point);
+    }
+
+    // Create a KDTree from the points so that we can find their nearest 
+    // neighbors quickly
     KDTree tree(points);
+    using Neighbors = std::vector<KDTree::Neighbor>;
 
-    for (std::size_t i = 0; i < points.size(); i++) {
-        const std::vector<KDTree::Neighbor> neighbors = tree.k_nearest(points[i], neighbor_count, i);
+    for (std::size_t i = 0; i < collected_points.size(); i++) {
 
-        if (neighbors.size() < 3) {
-            OrientedPoint oriented_point(points[i], Vec3(0.0, 0.0, 1.0));
+        // Find the point's nearest k neighbors. The query point is excluded by
+        // the KDTree and added explicitly to the PCA neighborhood below.
+        const Neighbors neighbors = tree.k_nearest(points[i], options.k, i);
+
+        // CollectedPoint stores the location of the point and the sensor, to
+        // get the direction to the sensor we need to calculate and normalize.
+        const Vec3 to_origin = direction_to_origin(collected_points[i]);
+
+        // PCA needs at least three points. If there are less than three, we 
+        // default to using the to_sensor vector as the normal.
+        if (neighbors.size() + 1 < 3) {
+            OrientedPoint oriented_point(points[i], to_origin);
             oriented_points.push_back(oriented_point);
             continue;
         }
 
-        Vec3 local_center(0.0);
+        // Find the centroid of the query point and its neighbors.
+        const std::size_t neighborhood_size = neighbors.size() + 1;
+        Vec3 local_center = points[i];
         for (std::size_t j = 0; j < neighbors.size(); j++) {
             local_center += points[neighbors[j].index];
         }
-        local_center /= static_cast<double>(neighbors.size());
+        local_center /= static_cast<double>(neighborhood_size);
 
+        // Compute the covariance matrix of the query point and its neighbors.
         Mat3 covariance;
+        const Vec3 query_delta = points[i] - local_center;
+        covariance.add_outer_product(query_delta);
         for (std::size_t j = 0; j < neighbors.size(); j++) {
             const Vec3 delta = points[neighbors[j].index] - local_center;
             covariance.add_outer_product(delta);
         }
-        covariance /= static_cast<double>(neighbors.size());
+        covariance /= static_cast<double>(neighborhood_size);
 
+        // Find the direction of least variance using Eigen decomposition and 
+        // use it as the point's normal
         const EigenDecomposition eig = eigen_decomposition_symmetric(covariance);
         const int normal_index = eig.index_of_smallest_value();
         Vec3 normal = normalize(eig.vectors[normal_index]);
 
-        if (normal.z < 0.0) {
+        // PCA produces an arbitrarily oriented normal respective to the plane 
+        // defined by the eigen decomposition, so to determine the proper 
+        // orientation we use the vector from the point to the sensor origin. 
+        if (dot(normal, to_origin) < 0.0) {
             normal = -normal;
         }
 
+        // Store the point and normal in the OrientedPoint vector. We also 
+        // preserve the lambda values of the eigen decomposition as they can be 
+        // useful for other purposes
         OrientedPoint oriented_point(points[i], normal);
         oriented_point.lambdas = eig.values;
         oriented_points.push_back(oriented_point);
     }
 
     return oriented_points;
-}
-
-std::vector<OrientedPoint> estimate_normals(const std::vector<Vec3> &points, int k, NormalEstimationMethod method) {
-    switch (method) {
-    case NormalEstimationMethod::PCA:
-        return estimate_normals_pca(points, k);
-        break;
-    default:
-        return estimate_normals_pca(points, k);
-    }
-}
-
-OrientedPointCloud estimate_oriented_points_pca(const PointCloud &pointcloud, int k) {
-    OrientedPointCloud oriented_pointcloud;
-    oriented_pointcloud.oriented_points = estimate_normals_pca(pointcloud.points, k);
-    return oriented_pointcloud;
-}
-
-OrientedPointCloud estimate_oriented_points(const PointCloud &pointcloud, int k, NormalEstimationMethod method) {
-    switch (method) {
-    case NormalEstimationMethod::PCA:
-        return estimate_oriented_points_pca(pointcloud, k);
-        break;
-    default:
-        return estimate_oriented_points_pca(pointcloud, k);
-    }
 }

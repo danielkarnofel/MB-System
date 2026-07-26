@@ -1,23 +1,11 @@
 #pragma once
 
+#include <filesystem>
 #include <string>
 
 #include "../data_types/geometry.h"
 
-bool write_pointcloud_glb_file(
-    const char *filename, 
-    const PointCloud &pointcloud,
-    std::string *error_message
-);
-
-bool write_oriented_pointcloud_glb_file(
-    const char *filename, 
-    const OrientedPointCloud &oriented_pointcloud,
-    std::string *error_message
-);
-
-bool write_mesh_glb_file(
-    const char *filename, 
+[[nodiscard]] bool write_mesh_glb_file(
+    const std::filesystem::path &path,
     const Mesh &mesh,
-    std::string *error_message
-);
+    std::string *error);

@@ -2,9 +2,9 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cmath>
 #include <cstring>
 #include <limits>
 #include <string>
@@ -18,54 +18,80 @@
 
 namespace {
 
-void set_error(std::string *error_message, const std::string &message) {
-    if (error_message != nullptr) {
-        *error_message = message;
+void set_error(std::string *error, const std::string &message) {
+    if (error != nullptr) {
+        *error = message;
     }
 }
 
-bool is_finite_vec3(const Vec3 &value) {
-    return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
+[[nodiscard]] bool is_finite_vec3(const Vec3 &value) {
+    return std::isfinite(value.x) &&
+           std::isfinite(value.y) &&
+           std::isfinite(value.z);
 }
 
-bool validate_mesh(const Mesh &mesh, std::string *error_message) {
+[[nodiscard]] bool fits_float(double value) {
+    constexpr double max_float =
+        static_cast<double>(std::numeric_limits<float>::max());
+    return std::isfinite(value) && value >= -max_float && value <= max_float;
+}
+
+[[nodiscard]] bool fits_float_vec3(const Vec3 &value) {
+    return fits_float(value.x) &&
+           fits_float(value.y) &&
+           fits_float(value.z);
+}
+
+[[nodiscard]] bool validate_mesh(const Mesh &mesh, std::string *error) {
     if (mesh.vertices.empty()) {
-        set_error(error_message, "Mesh has no vertices");
+        set_error(error, "Mesh has no vertices");
         return false;
     }
 
     if (mesh.indices.empty()) {
-        set_error(error_message, "Mesh has no triangle indices");
+        set_error(error, "Mesh has no triangle indices");
         return false;
     }
 
     if (mesh.indices.size() % 3 != 0) {
-        set_error(error_message, "Mesh index count is not divisible by 3");
+        set_error(error, "Mesh index count is not divisible by 3");
         return false;
     }
 
     if (!mesh.normals.empty() && mesh.normals.size() != mesh.vertices.size()) {
-        set_error(error_message, "Mesh normal count does not match vertex count");
+        set_error(error, "Mesh normal count does not match vertex count");
         return false;
     }
 
-    for (std::size_t i = 0; i < mesh.vertices.size(); i++) {
+    for (std::size_t i = 0; i < mesh.vertices.size(); ++i) {
         if (!is_finite_vec3(mesh.vertices[i])) {
-            set_error(error_message, "Mesh contains non-finite vertex at index " + std::to_string(i));
+            set_error(error, "Mesh contains non-finite vertex at index " +
+                                 std::to_string(i));
+            return false;
+        }
+        if (!fits_float_vec3(mesh.vertices[i])) {
+            set_error(error, "Mesh vertex is outside the GLB float range at index " +
+                                 std::to_string(i));
             return false;
         }
     }
 
-    for (std::size_t i = 0; i < mesh.normals.size(); i++) {
+    for (std::size_t i = 0; i < mesh.normals.size(); ++i) {
         if (!is_finite_vec3(mesh.normals[i])) {
-            set_error(error_message, "Mesh contains non-finite normal at index " + std::to_string(i));
+            set_error(error, "Mesh contains non-finite normal at index " +
+                                 std::to_string(i));
+            return false;
+        }
+        if (!fits_float_vec3(mesh.normals[i])) {
+            set_error(error, "Mesh normal is outside the GLB float range at index " +
+                                 std::to_string(i));
             return false;
         }
     }
 
     for (const unsigned int index : mesh.indices) {
         if (index >= mesh.vertices.size()) {
-            set_error(error_message, "Mesh contains an out-of-range vertex index");
+            set_error(error, "Mesh contains an out-of-range vertex index");
             return false;
         }
     }
@@ -73,7 +99,8 @@ bool validate_mesh(const Mesh &mesh, std::string *error_message) {
     return true;
 }
 
-std::array<double, 3> vec3_min_values(const std::vector<Vec3> &values) {
+[[nodiscard]] std::array<double, 3> vec3_min_values(
+    const std::vector<Vec3> &values) {
     std::array<double, 3> result{
         std::numeric_limits<double>::max(),
         std::numeric_limits<double>::max(),
@@ -89,7 +116,8 @@ std::array<double, 3> vec3_min_values(const std::vector<Vec3> &values) {
     return result;
 }
 
-std::array<double, 3> vec3_max_values(const std::vector<Vec3> &values) {
+[[nodiscard]] std::array<double, 3> vec3_max_values(
+    const std::vector<Vec3> &values) {
     std::array<double, 3> result{
         std::numeric_limits<double>::lowest(),
         std::numeric_limits<double>::lowest(),
@@ -105,41 +133,45 @@ std::array<double, 3> vec3_max_values(const std::vector<Vec3> &values) {
     return result;
 }
 
-std::array<double, 1> index_min_value(const std::vector<unsigned int> &indices) {
-    unsigned int min_value = std::numeric_limits<unsigned int>::max();
-    for (const unsigned int index : indices) {
+[[nodiscard]] std::array<double, 1> index_min_value(
+    const std::vector<std::uint32_t> &indices) {
+    std::uint32_t min_value = std::numeric_limits<std::uint32_t>::max();
+    for (const std::uint32_t index : indices) {
         min_value = std::min(min_value, index);
     }
     return {static_cast<double>(min_value)};
 }
 
-std::array<double, 1> index_max_value(const std::vector<unsigned int> &indices) {
-    unsigned int max_value = 0;
-    for (const unsigned int index : indices) {
+[[nodiscard]] std::array<double, 1> index_max_value(
+    const std::vector<std::uint32_t> &indices) {
+    std::uint32_t max_value = 0;
+    for (const std::uint32_t index : indices) {
         max_value = std::max(max_value, index);
     }
     return {static_cast<double>(max_value)};
 }
 
-void append_padding(std::vector<unsigned char> &buffer) {
-    while (buffer.size() % 4 != 0) {
-        buffer.push_back(0);
+void append_padding(std::vector<unsigned char> *buffer) {
+    while (buffer->size() % 4 != 0) {
+        buffer->push_back(0);
     }
 }
 
 template <typename T>
-std::size_t append_vector_bytes(std::vector<unsigned char> &buffer, const std::vector<T> &values) {
+std::size_t append_vector_bytes(std::vector<unsigned char> *buffer,
+                                const std::vector<T> &values) {
     append_padding(buffer);
-    const std::size_t offset = buffer.size();
+    const std::size_t offset = buffer->size();
     const std::size_t byte_count = values.size() * sizeof(T);
-    buffer.resize(offset + byte_count);
+    buffer->resize(offset + byte_count);
     if (byte_count > 0) {
-        std::memcpy(buffer.data() + offset, values.data(), byte_count);
+        std::memcpy(buffer->data() + offset, values.data(), byte_count);
     }
     return offset;
 }
 
-std::vector<float> flatten_vec3_values(const std::vector<Vec3> &values) {
+[[nodiscard]] std::vector<float> flatten_vec3_values(
+    const std::vector<Vec3> &values) {
     std::vector<float> flattened;
     flattened.reserve(values.size() * 3);
     for (const Vec3 &value : values) {
@@ -150,7 +182,7 @@ std::vector<float> flatten_vec3_values(const std::vector<Vec3> &values) {
     return flattened;
 }
 
-int add_buffer_view(tinygltf::Model &model,
+int add_buffer_view(tinygltf::Model *model,
                     int target,
                     std::size_t byte_offset,
                     std::size_t byte_length) {
@@ -159,11 +191,11 @@ int add_buffer_view(tinygltf::Model &model,
     buffer_view.byteOffset = byte_offset;
     buffer_view.byteLength = byte_length;
     buffer_view.target = target;
-    model.bufferViews.push_back(std::move(buffer_view));
-    return static_cast<int>(model.bufferViews.size()) - 1;
+    model->bufferViews.push_back(std::move(buffer_view));
+    return static_cast<int>(model->bufferViews.size()) - 1;
 }
 
-int add_vec3_accessor(tinygltf::Model &model,
+int add_vec3_accessor(tinygltf::Model *model,
                       int buffer_view_index,
                       std::size_t count,
                       const std::array<double, 3> &min_values,
@@ -176,11 +208,11 @@ int add_vec3_accessor(tinygltf::Model &model,
     accessor.type = TINYGLTF_TYPE_VEC3;
     accessor.minValues = {min_values[0], min_values[1], min_values[2]};
     accessor.maxValues = {max_values[0], max_values[1], max_values[2]};
-    model.accessors.push_back(std::move(accessor));
-    return static_cast<int>(model.accessors.size()) - 1;
+    model->accessors.push_back(std::move(accessor));
+    return static_cast<int>(model->accessors.size()) - 1;
 }
 
-int add_index_accessor(tinygltf::Model &model,
+int add_index_accessor(tinygltf::Model *model,
                        int buffer_view_index,
                        std::size_t count,
                        const std::array<double, 1> &min_values,
@@ -193,82 +225,70 @@ int add_index_accessor(tinygltf::Model &model,
     accessor.type = TINYGLTF_TYPE_SCALAR;
     accessor.minValues = {min_values[0]};
     accessor.maxValues = {max_values[0]};
-    model.accessors.push_back(std::move(accessor));
-    return static_cast<int>(model.accessors.size()) - 1;
+    model->accessors.push_back(std::move(accessor));
+    return static_cast<int>(model->accessors.size()) - 1;
 }
 
 } // namespace
 
-bool write_pointcloud_glb_file(
-    const char *filename, 
-    const PointCloud &pointcloud,
-    std::string *error_message
-) {
-    (void)filename;
-    (void)pointcloud;
-    set_error(error_message, "PointCloud GLB writer is not implemented");
-    return false;
-}
-
-bool write_oriented_pointcloud_glb_file(
-    const char *filename, 
-    const OrientedPointCloud &oriented_pointcloud,
-    std::string *error_message
-) {
-    (void)filename;
-    (void)oriented_pointcloud;
-    set_error(error_message, "OrientedPointCloud GLB writer is not implemented");
-    return false;
-}
-
-bool write_mesh_glb_file(
-    const char *filename, 
-    const Mesh &mesh,
-    std::string *error_message
-) {
-    if (error_message != nullptr) {
-        error_message->clear();
+bool write_mesh_glb_file(const std::filesystem::path &path,
+                         const Mesh &mesh,
+                         std::string *error) {
+    if (error != nullptr) {
+        error->clear();
     }
 
-    if (filename == nullptr || filename[0] == '\0') {
-        set_error(error_message, "GLB output filename is empty");
+    if (path.empty()) {
+        set_error(error, "GLB output path is empty");
         return false;
     }
 
-    if (!validate_mesh(mesh, error_message)) {
+    if (!validate_mesh(mesh, error)) {
         return false;
     }
 
     std::vector<unsigned char> binary_buffer;
 
     const std::vector<float> positions = flatten_vec3_values(mesh.vertices);
-    const std::size_t position_offset = append_vector_bytes(binary_buffer, positions);
+    const std::size_t position_offset =
+        append_vector_bytes(&binary_buffer, positions);
     const std::size_t position_byte_length = positions.size() * sizeof(float);
 
     std::size_t normal_offset = 0;
     std::size_t normal_byte_length = 0;
     if (!mesh.normals.empty()) {
         const std::vector<float> normals = flatten_vec3_values(mesh.normals);
-        normal_offset = append_vector_bytes(binary_buffer, normals);
+        normal_offset = append_vector_bytes(&binary_buffer, normals);
         normal_byte_length = normals.size() * sizeof(float);
     }
 
-    const std::vector<unsigned int> indices = mesh.indices;
-    const std::size_t index_offset = append_vector_bytes(binary_buffer, indices);
-    const std::size_t index_byte_length = indices.size() * sizeof(unsigned int);
-    append_padding(binary_buffer);
+    std::vector<std::uint32_t> indices;
+    indices.reserve(mesh.indices.size());
+    for (const unsigned int index : mesh.indices) {
+        indices.push_back(static_cast<std::uint32_t>(index));
+    }
+
+    const std::size_t index_offset =
+        append_vector_bytes(&binary_buffer, indices);
+    const std::size_t index_byte_length =
+        indices.size() * sizeof(std::uint32_t);
+    append_padding(&binary_buffer);
 
     tinygltf::Model model;
     model.asset.version = "2.0";
-    model.asset.generator = "MB-System mbmesh_dev";
+    model.asset.generator = "MB-System mbmesh";
 
     tinygltf::Buffer buffer;
     buffer.data = std::move(binary_buffer);
     model.buffers.push_back(std::move(buffer));
 
-    const int position_buffer_view = add_buffer_view(model, TINYGLTF_TARGET_ARRAY_BUFFER, position_offset, position_byte_length);
+    const int position_buffer_view = add_buffer_view(
+        &model,
+        TINYGLTF_TARGET_ARRAY_BUFFER,
+        position_offset,
+        position_byte_length);
     const int position_accessor = add_vec3_accessor(
-        model,
+        &model,
         position_buffer_view,
         mesh.vertices.size(),
         vec3_min_values(mesh.vertices),
@@ -276,22 +296,30 @@ bool write_mesh_glb_file(
 
     int normal_accessor = -1;
     if (!mesh.normals.empty()) {
-        const int normal_buffer_view = add_buffer_view(model, TINYGLTF_TARGET_ARRAY_BUFFER, normal_offset, normal_byte_length);
+        const int normal_buffer_view = add_buffer_view(
+            &model,
+            TINYGLTF_TARGET_ARRAY_BUFFER,
+            normal_offset,
+            normal_byte_length);
         normal_accessor = add_vec3_accessor(
-            model,
+            &model,
             normal_buffer_view,
             mesh.normals.size(),
             vec3_min_values(mesh.normals),
             vec3_max_values(mesh.normals));
     }
 
-    const int index_buffer_view = add_buffer_view(model, TINYGLTF_TARGET_ELEMENT_ARRAY_BUFFER, index_offset, index_byte_length);
+    const int index_buffer_view = add_buffer_view(
+        &model,
+        TINYGLTF_TARGET_ELEMENT_ARRAY_BUFFER,
+        index_offset,
+        index_byte_length);
     const int index_accessor = add_index_accessor(
-        model,
+        &model,
         index_buffer_view,
-        mesh.indices.size(),
-        index_min_value(mesh.indices),
-        index_max_value(mesh.indices));
+        indices.size(),
+        index_min_value(indices),
+        index_max_value(indices));
 
     tinygltf::Primitive primitive;
     primitive.mode = TINYGLTF_MODE_TRIANGLES;
@@ -309,7 +337,8 @@ bool write_mesh_glb_file(
 
     tinygltf::Material material;
     material.doubleSided = true;
-    material.pbrMetallicRoughness.baseColorFactor = {0.35, 0.55, 0.72, 1.0};
+    material.pbrMetallicRoughness.baseColorFactor =
+        {0.35, 0.55, 0.72, 1.0};
     material.pbrMetallicRoughness.metallicFactor = 0.0;
     material.pbrMetallicRoughness.roughnessFactor = 0.65;
     model.materials.push_back(std::move(material));
@@ -323,9 +352,11 @@ bool write_mesh_glb_file(
     model.scenes.push_back(std::move(scene));
     model.defaultScene = 0;
 
+    const std::string output_path = path.string();
     tinygltf::TinyGLTF gltf;
-    if (!gltf.WriteGltfSceneToFile(&model, filename, true, true, true, true)) {
-        set_error(error_message, std::string("Failed to write mesh GLB file: ") + filename);
+    if (!gltf.WriteGltfSceneToFile(
+            &model, output_path, true, true, true, true)) {
+        set_error(error, "Failed to write mesh GLB file: " + output_path);
         return false;
     }
 

@@ -1,27 +1,20 @@
-
 #pragma once
 
 #include "../data_types/geometry.h"
 
-#include <vector>
+#include "../include/math/eigen.h"
+#include "../include/math/kdtree.h"
+#include "../include/math/mat3.h"
 
-enum class NormalEstimationMethod {
-    PCA,
+struct NormalEstimationOptions {
+    std::size_t k = 10;
 };
 
-[[nodiscard]] std::vector<OrientedPoint> estimate_normals_pca(
-    const std::vector<Vec3> &points, int k = 20);
-
-[[nodiscard]] std::vector<OrientedPoint> estimate_normals(
-    const std::vector<Vec3> &points,
-    int k = 20,
-    NormalEstimationMethod method = NormalEstimationMethod::PCA);
-
-[[nodiscard]] OrientedPointCloud estimate_oriented_points_pca(
-    const PointCloud &pointcloud, 
-    int k = 20);
-
-[[nodiscard]] OrientedPointCloud estimate_oriented_points(
-    const PointCloud &pointcloud,
-    int k = 20,
-    NormalEstimationMethod method = NormalEstimationMethod::PCA);
+/*******************************************************************************
+ * Converts a CollectedPoint set to an OrientedPoint set using PCA (Principal 
+ * Component Analysis) normal estimation.
+ ******************************************************************************/
+OrientedPointCloud normal_estimation(
+    const CollectedPointCloud &collected_points, 
+    NormalEstimationOptions options
+);

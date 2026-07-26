@@ -1,5 +1,16 @@
-
 #pragma once
+
+#include <algorithm>
+
+#include "../data_types/geometry.h"
+
+struct MarchingCubesOptions {
+    double iso_value = 0.0;
+};
+
+Mesh marching_cubes(const ScalarGrid3D &scalar_grid, MarchingCubesOptions options);
+
+/******************************************************************************/
 
 const int edgeTable[256] =
 {

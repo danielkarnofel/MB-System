@@ -20,7 +20,7 @@ public:
     explicit KDTree(const std::vector<Vec3> &points) {
         build(points);
     }
-
+    
     void build(const std::vector<Vec3> &points) {
         nodes.clear();
         root = invalid_node;

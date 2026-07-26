@@ -1,5 +1,8 @@
 #include <vector>
 #include <filesystem>
+#include <iostream>
+#include <string>
+#include <utility>
 
 #include "io/datalist_reader.h"
 #include "io/glb_writer.h"
@@ -33,8 +36,6 @@ struct Options {
 
 Options parse_options(int argc, char **argv);
 
-CollectedPointCloud read_datalist(Options options);
-
 bool write_outputs(const Mesh &mesh, const Options &options, std::string *error);
 
 int main(int argc, char **argv) {
@@ -43,7 +44,22 @@ int main(int argc, char **argv) {
     Options options = parse_options(argc, argv);
 
     // Read the datalist incrementally and collect valid soundings:
-    CollectedPointCloud collected_points = read_datalist(options);
+    DatalistReaderOptions reader_options;
+    reader_options.bounds = options.bounds;
+    reader_options.has_bounds = options.has_bounds;
+    reader_options.verbose = options.verbose;
+
+    DatalistReadResult read_result;
+    std::string error;
+    if (!read_datalist(
+            options.input_datalist,
+            reader_options,
+            &read_result,
+            &error)) {
+        std::cerr << "mbmesh: " << error << '\n';
+        return 1;
+    }
+    CollectedPointCloud collected_points = std::move(read_result.points);
 
     // ================================================================================
 
@@ -62,18 +78,17 @@ int main(int argc, char **argv) {
     // ================================================================================
 
     // Write desired output files:
-    std::string error_message = "Error writing outputs.";
-    write_outputs(clean_mesh, options, &error_message);
+    if (!write_outputs(clean_mesh, options, &error)) {
+        std::cerr << "mbmesh: " << error << '\n';
+        return 1;
+    }
+
+    return 0;
 }
 
 Options parse_options(int argc, char **argv) {
     Options options;
     return options;
-}
-
-CollectedPointCloud read_datalist(Options options) {
-    CollectedPointCloud collected_points;
-    return collected_points;
 }
 
 bool write_outputs(

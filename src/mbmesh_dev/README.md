@@ -2,38 +2,22 @@
 
 ## Next steps:
 
-Finish core IO
-- glb_writer
-- swath_reader
+Implement: 
+- point_decimation.cpp
+- support_trimming.cpp
+- synthetic_data.h
 
-Sensor-origin data
-- Add sensor-origin to swath file input
-- This is critical for proper normal orientation
+Write small, independent unit tests for:
+- marching_cubes.cpp
+- normal_estimation.cpp
+- screened_poisson.cpp
+- datalist_reader.cpp
+- glb_writer.cpp
 
-Build pipeline functions
-- End-to-end wrapper functions
-- Generate meshes from swath data with user-friendly parameters
+Write end-to-end test using: 
+- Real data: multibeam/ZTopo.mb-1
+- Synthetic data
 
-Integrate into src/mbmesh
-- Update build and run macros to include new features
-- Update documentation 
+Add CLI compatibility
 
-3D Tiling
-- Implement OGC 3D tile support
-
-Testing and documentation
-- Prepare for final deliverable and presentation
-
-## mbmesh command
-
-General command to run `mbmesh` with a selected datalist:
-
-```bash
-mbmesh -I <datalist.mb-1> -O mbmesh_dev/output -html -V
-```
-
-Example:
-
-```bash
-mbmesh -I multibeam/ZTopo.mb-1 -html -V
-```
+Update README.md with full documentation

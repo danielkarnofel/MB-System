@@ -1,5 +1,6 @@
 #include <vector>
 #include <filesystem>
+#include <getopt.h>
 #include <iostream>
 #include <string>
 #include <utility>
@@ -42,6 +43,11 @@ int main(int argc, char **argv) {
 
     // Parse and validate configuration:
     Options options = parse_options(argc, argv);
+
+    if (options.input_datalist.empty()) {
+        std::cerr << "mbmesh: Input datalist path is empty\n";
+        return 1;
+    }
 
     // Read the datalist incrementally and collect valid soundings:
     DatalistReaderOptions reader_options;
@@ -88,6 +94,64 @@ int main(int argc, char **argv) {
 
 Options parse_options(int argc, char **argv) {
     Options options;
+
+    for (int i = 1; i < argc; ++i) {
+        if (std::string(argv[i]) == "-html") {
+            argv[i] = const_cast<char*>("--html");
+        }
+    }
+
+    static const struct option long_options[] = {
+        {"input", required_argument, nullptr, 'I'},
+        {"output", required_argument, nullptr, 'O'},
+        {"bounds", required_argument, nullptr, 'R'},
+        {"html", no_argument, nullptr, 'H'},
+        {"verbose", no_argument, nullptr, 'V'},
+        {"help", no_argument, nullptr, 'h'},
+        {nullptr, 0, nullptr, 0},
+    };
+
+    int c = 0;
+    int option_index = 0;
+    while ((c = getopt_long(argc, argv, "I:O:R:VHh", long_options, &option_index)) != -1) {
+        switch (c) {
+        case 'I':
+            options.input_datalist = optarg;
+            break;
+        case 'O':
+            options.output_directory = optarg;
+            break;
+        case 'R': {
+            double west = 0.0, east = 0.0, south = 0.0, north = 0.0;
+            if (std::sscanf(optarg, "%lf/%lf/%lf/%lf", &west, &east, &south, &north) == 4) {
+                options.bounds.degrees_W = west;
+                options.bounds.degrees_E = east;
+                options.bounds.degrees_S = south;
+                options.bounds.degrees_N = north;
+                options.has_bounds = true;
+            } else {
+                std::cerr << "mbmesh: invalid bounds argument: " << optarg << '\n';
+            }
+            break;
+        }
+        case 'V':
+            ++options.verbose;
+            break;
+        case 'H':
+            options.write_x3dom = true;
+            break;
+        case 'h':
+            std::cout << "Usage: mbmesh [-I datalist] [-O outputdir] [-R w/e/s/n] [-html] [-V]\n";
+            break;
+        default:
+            break;
+        }
+    }
+
+    if (options.input_datalist.empty() && optind < argc) {
+        options.input_datalist = argv[optind];
+    }
+
     return options;
 }
 

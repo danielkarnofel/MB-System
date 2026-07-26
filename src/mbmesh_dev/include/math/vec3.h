@@ -96,12 +96,18 @@ inline std::ostream &operator<<(std::ostream &out, const Vec3 &v) {
 
 [[nodiscard]] inline double inverse_length(const Vec3 &v) noexcept {
     const double len = v.length();
-    assert(std::fabs(len) > vec3_epsilon);
+    if (std::fabs(len) <= vec3_epsilon) {
+        return 0.0;
+    }
     return 1.0 / len;
 }
 
 [[nodiscard]] inline Vec3 normalize(const Vec3 &v) noexcept {
-    return v * inverse_length(v);
+    const double inv_len = inverse_length(v);
+    if (inv_len == 0.0) {
+        return Vec3(0.0, 0.0, 1.0);
+    }
+    return v * inv_len;
 }
 
 [[nodiscard]] inline constexpr double dot(const Vec3 &v1, const Vec3 &v2) noexcept {

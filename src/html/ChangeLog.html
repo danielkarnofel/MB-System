@@ -22,7 +22,7 @@ accessible as tarballs through the Github interface.</p>
 Version 5.8 Releases and Release Notes:</h3>
 <hr />
 <ul>
-<li>Version 5.8.3beta15 July 23, 2026</li>
+<li>Version 5.8.3beta15 July 26, 2026</li>
 <li>Version 5.8.3beta14 July 6, 2026</li>
 <li>Version 5.8.3beta13 June 18, 2026</li>
 <li>Version 5.8.3beta12 January 7, 2026</li>
@@ -72,7 +72,7 @@ Version 5.8 Releases and Release Notes:</h3>
 <li><strong>Version 5.8.0 January 22, 2024</strong></li>
 </ul>
 <hr />
-<h4 id="583beta15-july-23-2026">5.8.3beta15 (July 23, 2026)</h4>
+<h4 id="583beta15-july-26-2026">5.8.3beta15 (July 26, 2026)</h4>
 <p>Program mbusbl2fnv: New program that converts a USBL (ultra-short
 baseline) ROV tracking CSV file to an MB-System fast navigation (fnv)
 text file. The input CSV format has one header line followed by data
@@ -360,10 +360,215 @@ interface, where a separate program-startup default masked the gap, but
 meant that mbnavadjustmerge's --apply-navigation, run against a project
 created with --create-project, would silently skip updating each file's
 processing parameters with no error reported.</p>
-<p>The bugs described above were identified and fixed with the
-assistance of the AI coding assistant Claude Sonnet 5 (Anthropic, model
-claude-sonnet-5), operating as Claude Code under developer supervision
-and review.</p>
+<p>Program mbnavadjust: Fixed a regression from moving the
+navigation-inversion, grid-update, and apply-navigation logic into the
+shared mbnavadjust_core library (see above): the "please wait" message
+dialog no longer appeared during Invert Navigation or Update Grids,
+since those functions could no longer call GUI dialog functions
+directly. Restored the dialog by wrapping the calls at each of their GUI
+call sites (the Invert Navigation and Update Grids menu items, the
+automatic grid update after importing data, and the automatic grid
+update when opening a project whose topography grid does not yet exist)
+with the same do_message_on()/do_message_off() pattern already used
+elsewhere in the program, and did the same for Apply Adjusted
+Navigation, which had the identical gap. A follow-up fix addressed a
+second bug uncovered in the process: do_message_on() itself did not wait
+for the dialog to actually become mapped and viewable before returning,
+so on a dialog's first appearance in a session, the window manager's
+mapping could still be pending when the long operation immediately
+following it started; since none of these operations return control to
+the window system's event loop until they finish, the dialog's initial
+text could remain unpainted (an empty box) for the operation's entire
+duration. Fixed by having do_message_on() wait for the dialog to become
+viewable first, mirroring the equivalent wait already used for the main
+window at startup.</p>
+<p>Program mbnavadjust (and mbnavadjustmerge): During autopicking, a
+crossing whose section length is less than 0.25 times the project's
+desired section length is silently skipped (to avoid matching short
+sections at the end of a file); this is now reported to the user with a
+message stating the crossing was skipped due to short section length,
+whether autopick is run interactively or via mbnavadjustmerge.</p>
+<p>Program mbnavadjust: Fixed a segmentation fault when dismissing the
+Nav Err (crossing analysis) window while no crossing was currently
+loaded - for example immediately after clearing all ties to start over
+with a project. The dismiss callback freed the window's graphics
+contexts unconditionally instead of only when a crossing had actually
+been loaded (as the equivalent code in the Quit handler already
+correctly does), so dismissing the window a second time without an
+intervening crossing load double-freed them, crashing in Xlib's
+XFreeGC(). Diagnosed directly from the macOS crash report, which
+resolved exactly to the offending XFreeGC() call once the crash binary's
+UUID was confirmed to match the current build.</p>
+<p>Program mbnavadjust: Fixed the Controls dialog showing stale values
+when opened via the Nav Err window's Settings-&gt;Contours menu item,
+rather than the current project settings shown when it is opened via the
+main window's Option-&gt;Controls menu item. The main window's button
+has two callbacks - one that refreshes every slider and toggle from the
+project settings, followed by one that displays the dialog - while the
+Nav Err window's button only had the second, display-only callback, so
+it showed whatever values happened to be left over from the last time
+the dialog was shown or applied. Fixed by adding the missing refresh
+callback.</p>
+<p>Program mbnavadjust: During autopicking, the crossing/section/tie
+list display and model plot (if open) did not update again until the
+entire run finished, since the loop that used to periodically refresh
+them lost access to those GUI functions once it was moved into the
+shared mbnavadjust_core library. They are now refreshed every tenth
+crossing processed via a callback function pointer passed in only by the
+interactive program; mbnavadjustmerge passes none, so the shared
+autopick loop itself has no GUI dependency.</p>
+<p>Program mbnavadjust: Fixed the grid region used by Update Grids,
+which was computed from each section's original, unadjusted geographic
+bounds and never updated afterward regardless of any navigation
+inversion performed since - a solution that moved sections a significant
+distance could leave the grid too small to encompass the shifted data.
+The region is now recalculated from each section's original bounds
+shifted by the range of its current navigation adjustment. The
+per-survey grids' region, previously computed but never actually passed
+to mbgrid (relying solely on mbgrid's own bounds auto-detection), is now
+adjusted the same way and passed explicitly, matching the overall
+project grid.</p>
+<p>Programs mbedit, mbnavedit, and mbvelocitytool: A memory-management
+and correctness audit of these three interactive Motif editors
+(paralleling the earlier audits of src/utilities and mbview/mbeditviz)
+found and fixed a critical NULL-pointer-write crash in mbnavedit's
+"Invert Navigation" modeling mode, triggered by ordinary use whenever
+exactly one point is visible: the inversion matrix's row-count formula
+went to zero for a single point, and mb_mallocd() treats a zero-byte
+allocation as a successful NULL return, so the code proceeded to write
+through the NULL buffer. All three programs shared a second bug: their
+get_text_string() helper did an unbounded strcpy() from any Motif text
+field into fixed-size buffers as small as 10 bytes, with no widget-side
+length limit set on any of the fields - fixed by adding an explicit
+destination-size parameter to the helper in all three programs. All
+three also shared an unterminated strncpy() when copying a user-selected
+file path from the file-selection dialog, which could read past the
+destination buffer on sufficiently long paths. Several additional bugs
+specific to each program were also fixed: in mbedit, undersized
+bottom-detect-type and pulse-type name lookup tables that indexed past
+their end on lidar/photogrammetry data, a reversed bit-shift that
+corrupted the extracted detection-priority value, and an out-of-bounds
+neighbor read in the median-spike filter's along-track window; in
+mbnavedit, an uninitialized-neighbor read that produced garbage
+speed/course-made-good values for single-point buffers, an off-by-one
+that silently excluded the first visible point from mouse "pick" mode,
+and unreliable time-interval bookkeeping after deleting bad-time records
+(replaced with a straightforward recompute pass); in mbvelocitytool,
+four sites where a chain of unchecked mb_mallocd() calls could let a
+later successful allocation mask an earlier failure and use the
+resulting NULL pointer, a divide-by-zero (surfacing as a silently
+propagated NaN) in the per-ping depth-residual linear fit when only one
+beam survived flagging, an uninitialized sensor-depth value used when
+every beam in a ping was flagged bad, a stray "!= 60" condition that
+silently skipped freeing all per-ping data buffers for any ping with
+exactly 60 beams, and a latent (then-unreachable) heap overflow in the
+profile-deletion code that copied array contents into a
+differently-sized, already-freed destination buffer rather than moving
+the whole profile record.</p>
+<p>Man pages: Audited the mbedit, mbnavedit, and mbvelocitytool man
+pages against their actual command-line options and current GUI
+behavior. Fixed a wrong option letter (mbedit's browse mode is -D, not
+-B, as the man page stated), two stale/nonexistent options in
+mbnavedit's synopsis and options list (-O and -T, neither implemented in
+the code), and several wrong default values and figures across all three
+(data buffer sizes, mbvelocitytool's default format id, default
+editable-profile point count, and maximum number of display profiles).
+Also fixed a self-contradicting keyboard-macro table in mbedit's man
+page (Grab and Info mode keys were listed backwards in one place and
+correctly in another), a mislabeled duplicate section heading, and added
+documentation for several existing but previously undocumented features:
+mbedit's "Flag by Beam Angle" filter and median-filter window-size
+sliders, its three-way exclusive "Show Flag States / Show Bottom Detect
+Algorithms / Show Source Pulse Types" view toggle, and mbnavedit's
+"Sonar Depth Plot" toggle.</p>
+<p>Man pages: Removed the mbps, geod, and proj man pages (and mbps's
+generated html/pdf docs). The mbps man page documented a program with no
+corresponding source file or build target anywhere in the current source
+tree - it was already gone from the build, just not from the
+documentation. The geod and proj man pages documented command-line tools
+belonging to the external PROJ library dependency rather than programs
+developed as part of MB-System, and were never actually wired into
+either build system to begin with. Updated both the CMake and autotools
+build files for src/man/man1 and src/html to remove the now-dangling
+references to these three pages.</p>
+<p>Programs in src/utilities: Added long-option (--long-name)
+equivalents to every remaining command-line program in src/utilities
+that previously supported only traditional single-letter options,
+extending the getopt_long() support already in place for about 15 other
+utilities (mbinfo, mbdatalist, mbpreprocess, mbsslayout, mbvoxelclean,
+etc.). This covers 31 programs: mb7k2jstar, mbabsorption, mbareaclean,
+mbauvloglist, mbbackangle, mbclean, mbcopy, mbctdlist, mbdefaults,
+mbextractsegy, mbfilter, mbformat, mbgetesf, mbgrid, mbhistogram,
+mblevitus, mblist, mbmapscale, mbmosaic, mbnavlist, mbprocess,
+mbrolltimelag, mbroutetime, mbsegygrid, mbsegyinfo, mbsegylist,
+mbsegypsd, mbset, mbsvplist, mbsvpselect, and mbtime. Every existing
+short option continues to work exactly as before; each program's --help
+output now lists every long/short pair. This work surfaced four short
+options that had been silently accepted by each program's option parser
+for the program's entire history (predating even this repository's 2019
+move from Subversion to Git) with no corresponding case handler at all -
+inert no-ops with no effect and no documentation anywhere. Investigating
+each: mbsegylist's -W turned out to be real, unimplemented functionality
+- mbsegylist is a segy-format sibling of mblist, which has a working
+-W/--use-feet that converts bathymetry and distance output columns from
+meters to feet, and mbsegylist's own man page documents its fixed
+sonar-depth and water-depth output columns in meters, strongly
+suggesting the option string was copied from mblist without ever porting
+the conversion logic; -W/--use-feet is now fully implemented in
+mbsegylist and documented in its man page. The other three
+(mbauvloglist's -W, mbsegypsd's -P, mbextractsegy's -D) had no
+discoverable intended purpose anywhere in the code, man pages, or usage
+messages, so rather than guess at functionality they were removed
+outright.</p>
+<p>Programs mbedit, mbnavedit, mbvelocitytool, mbgrdviz, and mbeditviz:
+Added long-option (--long-name) equivalents to these five interactive
+Motif programs' command-line options, extending the getopt_long() work
+above from src/utilities to the GUI editors (mbnavadjust was requested
+too but already had full getopt_long() support). As with src/utilities,
+this surfaced a dead option with no case handler at all: mbedit's -S.
+Unlike the src/utilities finds, this one had a full, traceable history
+back to 1993 - before MB-System's "Version 5.0" rewrite in 2000, -S set
+a startup_save_mode flag controlling whether a pre-existing edit save
+(.esf) file would be loaded for the input file; the getopt string lost
+its argument and the case handler was later dropped entirely as the code
+was restructured into the modern Motif-callback architecture, but the
+underlying feature never actually disappeared - mbedit still has two
+live callback paths, one that loads a file fresh and one that loads it
+using an existing edit save file, offered to the user via a "use
+previous edits?" dialog that pops up at startup whenever a save file
+already exists. The CLI flag's original job was simply to skip that
+dialog and answer "yes" automatically, exactly the kind of thing needed
+when mbedit is launched non-interactively by another process (the same
+rationale as the existing -G/--gui-mode option). Restored as
+-S/--use-edit-save. Updated mbedit's man page to document every
+long-option equivalent in both the synopsis and options list, matching
+the format already used by the getopt_long-converted src/utilities
+programs, and fixed a duplicate --verbose/-V entry found in the
+process.</p>
+<p>Program mbtrnpp: Added a first man page for this utility, which
+previously had no documentation at all. mbtrnpp is an optional real-time
+preprocessor, normally run unattended aboard an AUV or other survey
+platform, that reads multibeam bathymetry (from a datalist, a single
+swath file, or a live network socket), applies automated cleaning and
+downsampling, and passes the result to an embedded terrain relative
+navigation (TRN) process; it is built only when MB-System is configured
+with TRN support (--enable-mbtrn with autotools, or -DbuildTRN=ON with
+CMake, both of which are the default). The new man page documents the
+synopsis, description, and every command-line/configuration-file option
+(input/output specifiers, TRN map/filter/ convergence settings,
+reinitialization and decimation options, and the mb-out/trn-out network
+output mnemonics), drawn from the option-parsing code in mbtrnpp.c and
+the existing README-mbtrnpp.md and mbtrnpp-cfg.example documentation,
+along with usage examples. The page is installed by
+src/man/man1/CMakeLists.txt only when the buildTRN CMake option is
+enabled, and by src/man/man1/Makefile.am/Makefile.in only when the
+BUILD_MBTRNUTILS automake conditional is set, matching the pattern
+already used for the deprecated-program man pages so that the page is
+never installed alongside a build that lacks the program itself.</p>
+<p>The bugs described above, and the mbtrnpp man page, were identified
+and written with the assistance of the AI coding assistant Claude Sonnet
+5 (Anthropic, model claude-sonnet-5), operating as Claude Code under
+developer supervision and review.</p>
 <h4 id="583beta14-july-6-2026">5.8.3beta14 (July 6, 2026)</h4>
 <p>Programs mbedit, mbnavedit, mbvelocitytool, mbgrdviz, mbeditviz,
 mbnavadjust: updated Motif GUI code to eliminate two deprecated

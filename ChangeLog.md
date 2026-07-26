@@ -21,7 +21,7 @@ or beta, are equally accessible as tarballs through the Github interface.
 ---
 ### MB-System Version 5.8 Releases and Release Notes:
 ---
-- Version 5.8.3beta15    July 23, 2026
+- Version 5.8.3beta15    July 26, 2026
 - Version 5.8.3beta14    July 6, 2026
 - Version 5.8.3beta13    June 18, 2026
 - Version 5.8.3beta12    January 7, 2026
@@ -72,7 +72,7 @@ or beta, are equally accessible as tarballs through the Github interface.
 
 ---
 
-#### 5.8.3beta15 (July 23, 2026)
+#### 5.8.3beta15 (July 26, 2026)
 
 Program mbusbl2fnv: New program that converts a USBL (ultra-short baseline) ROV
 tracking CSV file to an MB-System fast navigation (fnv) text file. The input CSV

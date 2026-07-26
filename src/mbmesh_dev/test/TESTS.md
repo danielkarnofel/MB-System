@@ -156,3 +156,14 @@ g++ -std=c++17 -I src/mbmesh_dev/include -I src/mbgrd2gltf \
   src/mbmesh_dev/src/io/glb_writer.cpp \
   -o /tmp/mbmesh_test_glb_writer && /tmp/mbmesh_test_glb_writer
 ```
+
+### Swath Reader Conversion Test
+
+Reads a tiny swath-style text fixture, converts soundings into `CollectedPointCloud` records with sensor origins preserved, filters flagged/out-of-bounds beams, and verifies malformed input is rejected.
+
+```bash
+g++ -std=c++17 -I src/mbmesh_dev/include \
+  src/mbmesh_dev/test/test_swath_reader.cpp \
+  src/mbmesh_dev/src/io/swath_reader.cpp \
+  -o /tmp/mbmesh_test_swath_reader && /tmp/mbmesh_test_swath_reader
+```

@@ -238,7 +238,7 @@ ScalarGrid3D screened_poisson(const OrientedPointCloud &oriented_points, Screene
 					double diagonal = 6.0;
 					double numerator = neighbor_sum - cell_size_squared * normal_divergence.at(x, y, z);
 
-					if (options.screening_weight > 0.0) {
+					if (options.use_screening && options.screening_weight > 0.0) {
 						const double sample_weight = screening_weights.at(x, y, z);
 						if (sample_weight > 0.0) {
 							const double scaled_screening_weight = cell_size_squared * options.screening_weight * sample_weight;
@@ -301,7 +301,7 @@ ScalarGrid3D screened_poisson(const OrientedPointCloud &oriented_points, Screene
 	const double sample_iso_value = scalar_sum / static_cast<double>(oriented_points.size());
 
     for (double &value : scalar_indicator_field.values) {
-        value -= sample_iso_value;
+        value -= sample_iso_value - options.iso_value;
     }
 
 	return scalar_indicator_field;

@@ -26,6 +26,95 @@ constexpr int edge_corners[12][2] = {
     {3, 7},
 };
 
+struct EdgeCache {
+    int nx = 0;
+    int ny = 0;
+    int nz = 0;
+    std::vector<int> x_edges;
+    std::vector<int> y_edges;
+    std::vector<int> z_edges;
+
+    explicit EdgeCache(const ScalarGrid3D &grid)
+        : nx(grid.nx),
+          ny(grid.ny),
+          nz(grid.nz),
+          x_edges(static_cast<std::size_t>(std::max(0, static_cast<int>(grid.nx) - 1)) *
+                      static_cast<std::size_t>(grid.ny) *
+                      static_cast<std::size_t>(grid.nz),
+                  -1),
+          y_edges(static_cast<std::size_t>(grid.nx) *
+                      static_cast<std::size_t>(std::max(0, static_cast<int>(grid.ny) - 1)) *
+                      static_cast<std::size_t>(grid.nz),
+                  -1),
+          z_edges(static_cast<std::size_t>(grid.nx) *
+                      static_cast<std::size_t>(grid.ny) *
+                      static_cast<std::size_t>(std::max(0, static_cast<int>(grid.nz) - 1)),
+                  -1) {}
+
+    int &edge_vertex(int x, int y, int z, int edge) {
+        switch (edge) {
+        case 0:
+            return x_edge(x, y, z);
+        case 1:
+            return y_edge(x + 1, y, z);
+        case 2:
+            return x_edge(x, y + 1, z);
+        case 3:
+            return y_edge(x, y, z);
+        case 4:
+            return x_edge(x, y, z + 1);
+        case 5:
+            return y_edge(x + 1, y, z + 1);
+        case 6:
+            return x_edge(x, y + 1, z + 1);
+        case 7:
+            return y_edge(x, y, z + 1);
+        case 8:
+            return z_edge(x, y, z);
+        case 9:
+            return z_edge(x + 1, y, z);
+        case 10:
+            return z_edge(x + 1, y + 1, z);
+        case 11:
+            return z_edge(x, y + 1, z);
+        default:
+            assert(false);
+            return x_edges[0];
+        }
+    }
+
+private:
+    int &x_edge(int x, int y, int z) {
+        assert(x >= 0 && x < nx - 1);
+        assert(y >= 0 && y < ny);
+        assert(z >= 0 && z < nz);
+        return x_edges[(static_cast<std::size_t>(z) * static_cast<std::size_t>(ny) +
+                        static_cast<std::size_t>(y)) *
+                           static_cast<std::size_t>(nx - 1) +
+                       static_cast<std::size_t>(x)];
+    }
+
+    int &y_edge(int x, int y, int z) {
+        assert(x >= 0 && x < nx);
+        assert(y >= 0 && y < ny - 1);
+        assert(z >= 0 && z < nz);
+        return y_edges[(static_cast<std::size_t>(z) * static_cast<std::size_t>(ny - 1) +
+                        static_cast<std::size_t>(y)) *
+                           static_cast<std::size_t>(nx) +
+                       static_cast<std::size_t>(x)];
+    }
+
+    int &z_edge(int x, int y, int z) {
+        assert(x >= 0 && x < nx);
+        assert(y >= 0 && y < ny);
+        assert(z >= 0 && z < nz - 1);
+        return z_edges[(static_cast<std::size_t>(z) * static_cast<std::size_t>(ny) +
+                        static_cast<std::size_t>(y)) *
+                           static_cast<std::size_t>(nx) +
+                       static_cast<std::size_t>(x)];
+    }
+};
+
 Mesh marching_cubes(const ScalarGrid3D &scalar_grid, MarchingCubesOptions options) {
 
     Mesh mesh;
@@ -33,6 +122,8 @@ Mesh marching_cubes(const ScalarGrid3D &scalar_grid, MarchingCubesOptions option
     if (scalar_grid.nx < 2 || scalar_grid.ny < 2 || scalar_grid.nz < 2 || scalar_grid.cell_size <= 0.0) {
         return mesh;
     }
+
+    EdgeCache cache(scalar_grid);
 
     for (int z = 0; z < scalar_grid.nz - 1; z++) {
         for (int y = 0; y < scalar_grid.ny - 1; y++) {
@@ -65,14 +156,21 @@ Mesh marching_cubes(const ScalarGrid3D &scalar_grid, MarchingCubesOptions option
                 for (int edge = 0; edge < 12; edge++) {
                     if ((edgeTable[cube_index] & (1 << edge)) != 0) {
 
-                        const int a = edge_corners[edge][0];
-                        const int b = edge_corners[edge][1];
+                        int &cached_vertex = cache.edge_vertex(x, y, z, edge);
+                        if (cached_vertex >= 0) {
+                            edge_vertices[edge] = cached_vertex;
+                        } else {
+                            const int a = edge_corners[edge][0];
+                            const int b = edge_corners[edge][1];
 
-                        const double t = std::clamp((options.iso_value - values[a]) / (values[b] - values[a]), 0.0, 1.0);
-                        const Vec3 interpolated_position = positions[a] + (positions[b] - positions[a]) * t;
+                            cached_vertex = static_cast<int>(mesh.vertices.size());
 
-                        edge_vertices[edge] = mesh.vertices.size();
-                        mesh.vertices.push_back(interpolated_position);
+                            const double t = std::clamp((options.iso_value - values[a]) / (values[b] - values[a]), 0.0, 1.0);
+                            const Vec3 interpolated_position = positions[a] + (positions[b] - positions[a]) * t;
+
+                            edge_vertices[edge] = cached_vertex;
+                            mesh.vertices.push_back(interpolated_position);
+                        }
                     }
                 }
 

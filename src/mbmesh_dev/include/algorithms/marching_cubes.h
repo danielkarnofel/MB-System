@@ -5,6 +5,8 @@
 #include "../data_types/geometry.h"
 
 struct MarchingCubesOptions {
+    // Scalar-field level extracted as the triangle surface. This should match
+    // the surface value produced by screened Poisson reconstruction.
     double iso_value = 0.0;
 };
 

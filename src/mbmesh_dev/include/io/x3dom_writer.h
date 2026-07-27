@@ -4,6 +4,7 @@
 #include <string>
 
 struct X3DomWriterOptions {
+    // Text displayed as the generated HTML document title.
     std::string title = "MB-System mbmesh";
 };
 

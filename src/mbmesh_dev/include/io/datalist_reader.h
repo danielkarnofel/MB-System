@@ -9,7 +9,7 @@
 
 struct DatalistReaderOptions {
     GeographicBounds bounds;
-    bool has_bounds = false;
+    bool use_bounds = false;
     bool reject_flagged_beams = true;
     int verbose = 0;
 };

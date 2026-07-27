@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+
 #include "../data_types/geometry.h"
 
 #include "../include/math/eigen.h"
@@ -7,7 +9,9 @@
 #include "../include/math/mat3.h"
 
 struct NormalEstimationOptions {
-    std::size_t k = 10;
+    // Number of neighboring samples used with the query point for the local
+    // PCA plane fit. Larger values suppress noise but smooth small features.
+    std::size_t k = 12;
 };
 
 /*******************************************************************************

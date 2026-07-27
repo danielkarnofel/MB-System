@@ -40,10 +40,7 @@ void set_error(std::string *error, const std::string &message) {
 
 } // namespace
 
-bool write_glb_x3dom_file(const std::filesystem::path &html_path,
-                          const std::string &glb_uri,
-                          const X3DomWriterOptions &options,
-                          std::string *error) {
+bool write_glb_x3dom_file(const std::filesystem::path &html_path, const std::string &glb_uri, const X3DomWriterOptions &options, std::string *error) {
     if (error != nullptr) {
         error->clear();
     }
@@ -60,9 +57,7 @@ bool write_glb_x3dom_file(const std::filesystem::path &html_path,
 
     std::ofstream output(html_path);
     if (!output) {
-        set_error(
-            error,
-            "Unable to create X3DOM file: " + html_path.string());
+        set_error(error, "Unable to create X3DOM file: " + html_path.string());
         return false;
     }
 

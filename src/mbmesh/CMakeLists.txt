@@ -9,32 +9,36 @@
 
 message("In src/mbmesh")
 
-# mbmesh executable
-add_executable(mbmesh mbmesh.cpp pointcloud_glb_writer.cpp)
+set(MBMESH_SOURCES
+  mbmesh.cpp
+  src/io/datalist_reader.cpp
+  src/io/glb_writer.cpp
+  src/io/x3dom_writer.cpp
+  src/algorithms/point_decimation.cpp
+  src/algorithms/normal_estimation.cpp
+  src/algorithms/screened_poisson.cpp
+  src/algorithms/marching_cubes.cpp
+  src/algorithms/support_trimming.cpp)
+
+add_executable(mbmesh ${MBMESH_SOURCES})
+target_compile_features(mbmesh PRIVATE cxx_std_17)
 
 # Link to MB-System mbio library
 target_link_libraries(mbmesh PRIVATE mbio)
 
-# Include MB-System headers and the bundled tinygltf headers
 target_include_directories(mbmesh PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_SOURCE_DIR}/src/mbio
   ${CMAKE_SOURCE_DIR}/src/mbgrd2gltf)
 
-# Install
 install(TARGETS mbmesh DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-# Unit tests for mbmesh
-if(ENABLE_TESTING)
-  add_executable(test_mbmesh test_mbmesh.cpp)
-  
-  # Link against Google Test and MB-System libraries
-  target_link_libraries(test_mbmesh PRIVATE gtest gtest_main mbio)
-  
-  # Include MB-System headers
-  target_include_directories(test_mbmesh PRIVATE ${CMAKE_SOURCE_DIR}/src/mbio)
-  
-  # Register test
-  add_test(NAME MBMeshTests COMMAND test_mbmesh)
-  
-  message("Added test_mbmesh target for unit testing")
+if(buildTests)
+  add_executable(mbmesh_test_support_trimming
+    tests/test_support_trimming.cpp
+    src/algorithms/support_trimming.cpp)
+  target_compile_features(mbmesh_test_support_trimming PRIVATE cxx_std_17)
+  target_include_directories(mbmesh_test_support_trimming PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  add_test(NAME mbmesh_support_trimming COMMAND mbmesh_test_support_trimming)
 endif()

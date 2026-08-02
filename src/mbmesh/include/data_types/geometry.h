@@ -92,6 +92,14 @@ struct ScalarGrid3D {
     std::vector<double> values;
 
     ScalarGrid3D() = default;
+
+    ScalarGrid3D(Vec3 origin, double cell_size, int nx, int ny, int nz) :
+        origin(origin),
+        cell_size(cell_size),
+        nx(nx),
+        ny(ny),
+        nz(nz),
+        values(static_cast<std::size_t>(nx * ny * nz), 0.0) {}
     
     ScalarGrid3D(ReconstructionDomain domain) : 
         origin(domain.origin), 

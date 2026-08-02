@@ -90,6 +90,82 @@ void set_error(std::string *error, const std::string &message) {
     return true;
 }
 
+[[nodiscard]] bool validate_pointcloud(const PointCloud &pointcloud, std::string *error) {
+    if (pointcloud.empty()) {
+        set_error(error, "Point cloud has no points");
+        return false;
+    }
+
+    for (std::size_t i = 0; i < pointcloud.size(); ++i) {
+        if (!is_finite_vec3(pointcloud[i])) {
+            set_error(error, "Point cloud contains non-finite point at index " + std::to_string(i));
+            return false;
+        }
+        if (!fits_float_vec3(pointcloud[i])) {
+            set_error(error, "Point cloud point is outside the GLB float range at index " + std::to_string(i));
+            return false;
+        }
+    }
+
+    return true;
+}
+
+[[nodiscard]] bool validate_collected_pointcloud(const CollectedPointCloud &pointcloud, std::string *error) {
+    if (pointcloud.empty()) {
+        set_error(error, "Collected point cloud has no points");
+        return false;
+    }
+
+    for (std::size_t i = 0; i < pointcloud.size(); ++i) {
+        if (!is_finite_vec3(pointcloud[i].point)) {
+            set_error(error, "Collected point cloud contains non-finite point at index " + std::to_string(i));
+            return false;
+        }
+        if (!is_finite_vec3(pointcloud[i].origin)) {
+            set_error(error, "Collected point cloud contains non-finite origin at index " + std::to_string(i));
+            return false;
+        }
+        if (!fits_float_vec3(pointcloud[i].point)) {
+            set_error(error, "Collected point cloud point is outside the GLB float range at index " + std::to_string(i));
+            return false;
+        }
+        if (!fits_float_vec3(pointcloud[i].origin)) {
+            set_error(error, "Collected point cloud origin is outside the GLB float range at index " + std::to_string(i));
+            return false;
+        }
+    }
+
+    return true;
+}
+
+[[nodiscard]] bool validate_oriented_pointcloud(const OrientedPointCloud &pointcloud, std::string *error) {
+    if (pointcloud.empty()) {
+        set_error(error, "Oriented point cloud has no points");
+        return false;
+    }
+
+    for (std::size_t i = 0; i < pointcloud.size(); ++i) {
+        if (!is_finite_vec3(pointcloud[i].point)) {
+            set_error(error, "Oriented point cloud contains non-finite point at index " + std::to_string(i));
+            return false;
+        }
+        if (!is_finite_vec3(pointcloud[i].normal)) {
+            set_error(error, "Oriented point cloud contains non-finite normal at index " + std::to_string(i));
+            return false;
+        }
+        if (!fits_float_vec3(pointcloud[i].point)) {
+            set_error(error, "Oriented point cloud point is outside the GLB float range at index " + std::to_string(i));
+            return false;
+        }
+        if (!fits_float_vec3(pointcloud[i].normal)) {
+            set_error(error, "Oriented point cloud normal is outside the GLB float range at index " + std::to_string(i));
+            return false;
+        }
+    }
+
+    return true;
+}
+
 [[nodiscard]] std::array<double, 3> vec3_min_values(const std::vector<Vec3> &values) {
     std::array<double, 3> result{ std::numeric_limits<double>::max(), std::numeric_limits<double>::max(), std::numeric_limits<double>::max() };
 
@@ -195,6 +271,81 @@ int add_index_accessor(tinygltf::Model *model, int buffer_view_index, std::size_
     return static_cast<int>(model->accessors.size()) - 1;
 }
 
+[[nodiscard]] tinygltf::Material make_material(const std::array<double, 4> &base_color) {
+    tinygltf::Material material;
+    material.doubleSided = true;
+    material.pbrMetallicRoughness.baseColorFactor = {base_color[0], base_color[1], base_color[2], base_color[3]};
+    material.pbrMetallicRoughness.metallicFactor = 0.0;
+    material.pbrMetallicRoughness.roughnessFactor = 0.65;
+    return material;
+}
+
+[[nodiscard]] bool write_single_primitive_glb_file(
+    const std::filesystem::path &path,
+    const std::vector<Vec3> &vertices,
+    int primitive_mode,
+    const std::string &mesh_name,
+    const std::array<double, 4> &base_color,
+    const std::string &error_context,
+    std::string *error) {
+    if (path.empty()) {
+        set_error(error, "GLB output path is empty");
+        return false;
+    }
+
+    if (!validate_pointcloud(vertices, error)) {
+        return false;
+    }
+
+    std::vector<unsigned char> binary_buffer;
+
+    const std::vector<float> positions = flatten_vec3_values(vertices);
+    const std::size_t position_offset = append_vector_bytes(&binary_buffer, positions);
+    const std::size_t position_byte_length = positions.size() * sizeof(float);
+    append_padding(&binary_buffer);
+
+    tinygltf::Model model;
+    model.asset.version = "2.0";
+    model.asset.generator = "MB-System mbmesh";
+
+    tinygltf::Buffer buffer;
+    buffer.data = std::move(binary_buffer);
+    model.buffers.push_back(std::move(buffer));
+
+    const int position_buffer_view = add_buffer_view(&model, TINYGLTF_TARGET_ARRAY_BUFFER, position_offset, position_byte_length);
+    const int position_accessor = add_vec3_accessor(&model, position_buffer_view, vertices.size(), vec3_min_values(vertices), vec3_max_values(vertices));
+
+    tinygltf::Primitive primitive;
+    primitive.mode = primitive_mode;
+    primitive.attributes["POSITION"] = position_accessor;
+    primitive.material = 0;
+
+    tinygltf::Mesh gltf_mesh;
+    gltf_mesh.name = mesh_name;
+    gltf_mesh.primitives.push_back(std::move(primitive));
+    model.meshes.push_back(std::move(gltf_mesh));
+
+    model.materials.push_back(make_material(base_color));
+
+    tinygltf::Node node;
+    node.mesh = 0;
+    model.nodes.push_back(std::move(node));
+
+    tinygltf::Scene scene;
+    scene.nodes.push_back(0);
+    model.scenes.push_back(std::move(scene));
+    model.defaultScene = 0;
+
+    const std::string output_path = path.string();
+    tinygltf::TinyGLTF gltf;
+    if (!gltf.WriteGltfSceneToFile(&model, output_path, true, true, true, true)) {
+        set_error(error, "Failed to write " + error_context + " GLB file: " + output_path);
+        return false;
+    }
+
+    return true;
+}
+
 } // namespace
 
 bool write_mesh_glb_file(const std::filesystem::path &path, const Mesh &mesh, std::string *error) {
@@ -293,4 +444,91 @@ bool write_mesh_glb_file(const std::filesystem::path &path, const Mesh &mesh, st
     }
 
     return true;
+}
+
+bool write_pointcloud_glb_file(const std::filesystem::path &path, const PointCloud &pointcloud, std::string *error) {
+    if (error != nullptr) {
+        error->clear();
+    }
+
+    return write_single_primitive_glb_file(
+        path,
+        pointcloud,
+        TINYGLTF_MODE_POINTS,
+        "point_cloud",
+        {1.0, 0.45, 0.0, 1.0},
+        "point cloud",
+        error);
+}
+
+bool write_normal_lines_glb_file(
+    const std::filesystem::path &path,
+    const OrientedPointCloud &pointcloud,
+    double line_length,
+    std::string *error) {
+    if (error != nullptr) {
+        error->clear();
+    }
+
+    if (line_length <= 0.0 || !std::isfinite(line_length)) {
+        set_error(error, "Normal line length must be positive and finite");
+        return false;
+    }
+
+    if (!validate_oriented_pointcloud(pointcloud, error)) {
+        return false;
+    }
+
+    std::vector<Vec3> line_vertices;
+    line_vertices.reserve(pointcloud.size() * 2);
+    for (const OrientedPoint &oriented_point : pointcloud) {
+        const Vec3 normal = normalize(oriented_point.normal);
+        line_vertices.push_back(oriented_point.point);
+        line_vertices.push_back(oriented_point.point + normal * line_length);
+    }
+
+    return write_single_primitive_glb_file(
+        path,
+        line_vertices,
+        TINYGLTF_MODE_LINE,
+        "normal_lines",
+        {0.0, 0.75, 1.0, 1.0},
+        "normal lines",
+        error);
+}
+
+bool write_origin_ray_lines_glb_file(
+    const std::filesystem::path &path,
+    const CollectedPointCloud &pointcloud,
+    double line_length,
+    std::string *error) {
+    if (error != nullptr) {
+        error->clear();
+    }
+
+    if (line_length <= 0.0 || !std::isfinite(line_length)) {
+        set_error(error, "Origin-ray line length must be positive and finite");
+        return false;
+    }
+
+    if (!validate_collected_pointcloud(pointcloud, error)) {
+        return false;
+    }
+
+    std::vector<Vec3> line_vertices;
+    line_vertices.reserve(pointcloud.size() * 2);
+    for (const CollectedPoint &collected_point : pointcloud) {
+        const Vec3 direction_to_origin = normalize(collected_point.origin - collected_point.point);
+        line_vertices.push_back(collected_point.point);
+        line_vertices.push_back(collected_point.point + direction_to_origin * line_length);
+    }
+
+    return write_single_primitive_glb_file(
+        path,
+        line_vertices,
+        TINYGLTF_MODE_LINE,
+        "origin_ray_lines",
+        {1.0, 0.0, 0.85, 1.0},
+        "origin-ray lines",
+        error);
 }

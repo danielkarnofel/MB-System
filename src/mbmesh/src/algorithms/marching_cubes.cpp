@@ -89,9 +89,8 @@ private:
         assert(y >= 0 && y < ny);
         assert(z >= 0 && z < nz);
         return x_edges[(static_cast<std::size_t>(z) * static_cast<std::size_t>(ny) +
-                        static_cast<std::size_t>(y)) *
-                           static_cast<std::size_t>(nx - 1) +
-                       static_cast<std::size_t>(x)];
+                        static_cast<std::size_t>(y)) * static_cast<std::size_t>(nx - 1) +
+                        static_cast<std::size_t>(x)];
     }
 
     int &y_edge(int x, int y, int z) {
@@ -99,9 +98,8 @@ private:
         assert(y >= 0 && y < ny - 1);
         assert(z >= 0 && z < nz);
         return y_edges[(static_cast<std::size_t>(z) * static_cast<std::size_t>(ny - 1) +
-                        static_cast<std::size_t>(y)) *
-                           static_cast<std::size_t>(nx) +
-                       static_cast<std::size_t>(x)];
+                        static_cast<std::size_t>(y)) * static_cast<std::size_t>(nx) +
+                        static_cast<std::size_t>(x)];
     }
 
     int &z_edge(int x, int y, int z) {
@@ -109,9 +107,8 @@ private:
         assert(y >= 0 && y < ny);
         assert(z >= 0 && z < nz - 1);
         return z_edges[(static_cast<std::size_t>(z) * static_cast<std::size_t>(ny) +
-                        static_cast<std::size_t>(y)) *
-                           static_cast<std::size_t>(nx) +
-                       static_cast<std::size_t>(x)];
+                        static_cast<std::size_t>(y)) * static_cast<std::size_t>(nx) +
+                        static_cast<std::size_t>(x)];
     }
 };
 

@@ -2,9 +2,9 @@
 
 `mbmesh` reads MB-System datalists, converts accepted swath bathymetry
 soundings into sensor-origin-aware point samples, reconstructs a mesh, and
-writes mesh output for visualization.
+writes multiple output formats.
 
-## Current Pipeline
+## Pipeline
 
 1. Read an MB-System datalist with `read_datalist(...)`.
 2. Convert each valid beam into a `CollectedPoint`.
@@ -14,7 +14,7 @@ writes mesh output for visualization.
 6. Reconstruct a scalar field with screened Poisson.
 7. Extract a mesh with marching cubes.
 8. Trim unsupported mesh regions.
-9. Write `mesh.glb` and, optionally, an X3DOM `mesh.html` preview.
+9. Write `mesh.glb` and an X3DOM `mesh.html` preview.
 
 ## Build
 
@@ -44,7 +44,6 @@ build/src/mbmesh/mbmesh -I multibeam/ZTopo.mb-1 -O src/mbmesh/output -html -V
 - `-I`, `--input`: input MB-System datalist path.
 - `-O`, `--output`: output directory. Defaults to `mbmesh_output`.
 - `-R`, `--bounds`: geographic bounds as `west/east/south/north`.
-- `-html`, `--html`: write `mesh.html` next to `mesh.glb`.
 - `-V`, `--verbose`: increase progress output.
 - `-H`, `-h`, `--help`: print usage.
 
@@ -55,7 +54,4 @@ build/src/mbmesh/mbmesh -I multibeam/ZTopo.mb-1 -O src/mbmesh/output -html -V
 
 ## Next Steps
 
-- Tune mesh generation, decimation, and support trimming parameters.
-- Update independent unit tests under `src/mbmesh/tests`.
-- Add an end-to-end test using a known real datalist.
-- Expand documentation with expected input data and troubleshooting notes.
+- 

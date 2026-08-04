@@ -34,9 +34,26 @@ OrientedPointCloud normal_estimation(
 
     for (std::size_t i = 0; i < collected_points.size(); i++) {
 
-        // Find the point's nearest k neighbors. The query point is excluded by
-        // the KDTree and added explicitly to the PCA neighborhood below.
-        const Neighbors neighbors = tree.k_nearest(points[i], options.k, i);
+        Neighbors neighbors;
+
+        // Prefer a physical-radius neighborhood so normal smoothing follows 
+        // the requested level of detail instead of raw point density. Keep the
+        // query bounded by k so dense surveys do not collect every sample in
+        // the physical radius before trimming the neighborhood.
+        if (options.search_radius > 0.0) {
+            if (options.k > 0) {
+                neighbors = tree.bounded_radius_search_squared(
+                    points[i],
+                    options.search_radius * options.search_radius,
+                    options.k,
+                    i);
+            } else {
+                neighbors = tree.radius_search_squared(points[i], options.search_radius * options.search_radius, i);
+            }
+        }
+        if (neighbors.size() < options.minimum_neighbors) {
+            neighbors = tree.k_nearest(points[i], options.k, i);
+        }
 
         // CollectedPoint stores the location of the point and the sensor, to
         // get the direction to the sensor we need to calculate and normalize.

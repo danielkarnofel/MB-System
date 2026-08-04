@@ -5,7 +5,7 @@
 
 struct X3DomWriterOptions {
     // Text displayed as the generated HTML document title.
-    std::string title = "MB-System mbmesh";
+    std::string title = "MB-System mbmesh Mesh Viewer";
 };
 
 [[nodiscard]] bool write_glb_x3dom_file(

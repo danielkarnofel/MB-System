@@ -78,6 +78,29 @@ public:
         return neighbors;
     }
 
+    [[nodiscard]] std::vector<Neighbor> bounded_radius_search_squared(
+        const Vec3 &query,
+        double radius_squared,
+        std::size_t max_neighbors,
+        std::size_t exclude_index = invalid_index()) const {
+        std::vector<Neighbor> neighbors;
+        if (root == invalid_node || radius_squared < 0.0 || max_neighbors == 0) {
+            return neighbors;
+        }
+
+        NeighborQueue queue;
+        bounded_radius_search_squared_recursive(root, query, radius_squared, max_neighbors, exclude_index, queue);
+
+        neighbors.reserve(queue.size());
+        while (!queue.empty()) {
+            neighbors.push_back(queue.top());
+            queue.pop();
+        }
+
+        std::sort(neighbors.begin(), neighbors.end(), closer_neighbor);
+        return neighbors;
+    }
+
     [[nodiscard]] static constexpr std::size_t invalid_index() noexcept {
         return std::numeric_limits<std::size_t>::max();
     }
@@ -193,6 +216,55 @@ private:
         radius_search_squared_recursive(near_child, query, radius_squared, exclude_index, neighbors);
         if (delta * delta <= radius_squared) {
             radius_search_squared_recursive(far_child, query, radius_squared, exclude_index, neighbors);
+        }
+    }
+
+    void bounded_radius_search_squared_recursive(
+        int node_index,
+        const Vec3 &query,
+        double radius_squared,
+        std::size_t max_neighbors,
+        std::size_t exclude_index,
+        NeighborQueue &queue) const {
+        if (node_index == invalid_node) {
+            return;
+        }
+
+        const Node &node = nodes[node_index];
+        const double d2 = distance_squared(query, node.point);
+        if (node.index != exclude_index && d2 <= radius_squared) {
+            const Neighbor candidate{node.index, d2};
+            if (queue.size() < max_neighbors) {
+                queue.push(candidate);
+            }
+            else if (closer_neighbor(candidate, queue.top())) {
+                queue.pop();
+                queue.push(candidate);
+            }
+        }
+
+        const double delta = coordinate(query, node.axis) - coordinate(node.point, node.axis);
+        const int near_child = delta < 0.0 ? node.left : node.right;
+        const int far_child = delta < 0.0 ? node.right : node.left;
+
+        bounded_radius_search_squared_recursive(
+            near_child,
+            query,
+            radius_squared,
+            max_neighbors,
+            exclude_index,
+            queue);
+
+        const double search_limit_squared =
+            queue.size() < max_neighbors ? radius_squared : std::min(radius_squared, queue.top().distance_squared);
+        if (delta * delta <= search_limit_squared) {
+            bounded_radius_search_squared_recursive(
+                far_child,
+                query,
+                radius_squared,
+                max_neighbors,
+                exclude_index,
+                queue);
         }
     }
 

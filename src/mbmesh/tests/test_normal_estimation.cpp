@@ -1,6 +1,7 @@
 #include "synthetic_data.h"
 #include "algorithms/normal_estimation.h"
 #include "io/glb_writer.h"
+#include "math/kdtree.h"
 
 #include <algorithm>
 #include <cmath>
@@ -109,11 +110,43 @@ namespace {
     return true;
 }
 
+[[nodiscard]] bool validate_bounded_radius_search() {
+    std::vector<Vec3> points;
+    for (int i = 0; i < 10; i++) {
+        points.push_back(Vec3(static_cast<double>(i), 0.0, 0.0));
+    }
+
+    const KDTree tree(points);
+    const std::vector<KDTree::Neighbor> bounded =
+        tree.bounded_radius_search_squared(Vec3(4.0, 0.0, 0.0), 9.0, 3, 4);
+    const std::vector<KDTree::Neighbor> full =
+        tree.radius_search_squared(Vec3(4.0, 0.0, 0.0), 9.0, 4);
+
+    if (bounded.size() != 3 || full.size() < bounded.size()) {
+        std::fprintf(stderr, "Unexpected bounded radius search result size\n");
+        return false;
+    }
+
+    for (std::size_t i = 0; i < bounded.size(); i++) {
+        if (bounded[i].index != full[i].index ||
+            std::fabs(bounded[i].distance_squared - full[i].distance_squared) > vec3_epsilon) {
+            std::fprintf(stderr, "Bounded radius search did not match nearest full-radius neighbors\n");
+            return false;
+        }
+    }
+
+    return true;
+}
+
 } // namespace
 
 int main() {
     const std::filesystem::path output_dir = "src/mbmesh/output";
     std::filesystem::create_directories(output_dir);
+
+    if (!validate_bounded_radius_search()) {
+        return 1;
+    }
 
     const Vec3 sensor_origin(0.0, 0.0, 3.0);
     const CollectedPointCloud collected_points =
@@ -126,6 +159,7 @@ int main() {
 
     NormalEstimationOptions options;
     options.k = 16;
+    options.search_radius = 0.60;
     const OrientedPointCloud oriented_points = normal_estimation(collected_points, options);
 
     std::printf("Perturbed plane normal estimation: %zu points\n",

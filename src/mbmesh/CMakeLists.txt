@@ -11,7 +11,9 @@ message("In src/mbmesh")
 
 set(MBMESH_SOURCES
   mbmesh.cpp
+  settings.cpp
   src/io/datalist_reader.cpp
+  src/io/xyz_writer.cpp
   src/io/glb_writer.cpp
   src/io/x3dom_writer.cpp
   src/algorithms/point_decimation.cpp

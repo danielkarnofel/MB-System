@@ -4,8 +4,10 @@
 #include "algorithms/support_trimming.h"
 #include "io/glb_writer.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -24,6 +26,43 @@ bool indices_are_valid(const Mesh &mesh) {
         }
     }
     return true;
+}
+
+struct LodDefaults {
+    ScreenedPoissonOptions poisson;
+    MarchingCubesOptions marching_cubes;
+    SupportTrimmingOptions trimming;
+};
+
+LodDefaults make_lod_defaults(double requested_feature_size) {
+    LodDefaults options;
+
+    // Keep this logic in sync with mbmesh.cpp::set_lod_defaults. The test only
+    // needs the reconstruction and trimming options because it starts from an
+    // oriented synthetic point cloud.
+    const double feature_size = std::clamp(requested_feature_size, 0.10, 5.0);
+    const double cell_size = std::clamp(0.5 * feature_size, 0.05, 0.50);
+
+    options.poisson.cell_size = cell_size;
+    options.poisson.padding = std::clamp(4.0 * cell_size, 2 * cell_size, 5.00);
+    options.poisson.normal_splat_radius = std::clamp(2.0 * cell_size, 0.10, 1.0);
+    options.poisson.screening_weight = std::clamp(10.0 / (1.0 + feature_size), 2.5, 10.0);
+    options.poisson.solver_iterations = std::clamp(
+        static_cast<int>(std::round(220.0 + 80.0 / std::sqrt(feature_size))),
+        200,
+        500);
+    options.poisson.use_screening = true;
+    options.poisson.iso_value = 0.0;
+
+    options.marching_cubes.iso_value = 0.0;
+
+    options.trimming.enabled = true;
+    options.trimming.support_radius = std::clamp(6.0 * cell_size, 0.35, 2.50);
+    options.trimming.max_normal_offset = std::clamp(3.0 * cell_size, 0.12, 1.25);
+    options.trimming.minimum_neighbors = 2;
+    options.trimming.minimum_normal_alignment = 0.0;
+
+    return options;
 }
 
 OrientedPointCloud make_plane_with_half_torus_arch_samples() {
@@ -71,7 +110,7 @@ OrientedPointCloud make_plane_with_half_torus_arch_samples() {
 
 } // namespace
 
-int main() {
+int main(int argc, char **argv) {
     const std::filesystem::path output_dir = "src/mbmesh/output";
     const std::filesystem::path raw_glb_path = output_dir / "st-test-raw-mesh.glb";
     const std::filesystem::path trimmed_glb_path = output_dir / "st-test-trimmed-mesh.glb";
@@ -84,39 +123,46 @@ int main() {
         return 1;
     }
 
-    ScreenedPoissonOptions poisson_options;
-    poisson_options.cell_size = 0.04;
-    poisson_options.padding = 0.30;
-    poisson_options.normal_splat_radius = 0.18;
-    poisson_options.screening_weight = 8.0;
-    poisson_options.solver_iterations = 400;
-    poisson_options.use_screening = true;
-    poisson_options.iso_value = 0.0;
+    double feature_size = 0.25;
+    if (argc > 1) {
+        feature_size = std::strtod(argv[1], nullptr);
+    }
 
-    const ScalarGrid3D poisson_surface = screened_poisson(samples, poisson_options);
+    const LodDefaults defaults = make_lod_defaults(feature_size);
+
+    std::printf("Support trimming synthetic LOD defaults:"
+                "\n  feature_size: %.3f"
+                "\n  poisson_cell_size: %.3f"
+                "\n  poisson_padding: %.3f"
+                "\n  poisson_splat_radius: %.3f"
+                "\n  poisson_iterations: %d"
+                "\n  poisson_screening_weight: %.3f"
+                "\n  trim_radius: %.3f"
+                "\n  trim_normal_offset: %.3f\n",
+                std::clamp(feature_size, 0.10, 5.0),
+                defaults.poisson.cell_size,
+                defaults.poisson.padding,
+                defaults.poisson.normal_splat_radius,
+                defaults.poisson.solver_iterations,
+                defaults.poisson.screening_weight,
+                defaults.trimming.support_radius,
+                defaults.trimming.max_normal_offset);
+
+    const ScalarGrid3D poisson_surface = screened_poisson(samples, defaults.poisson);
     if (poisson_surface.values.empty()) {
         std::fprintf(stderr, "Screened Poisson reconstruction produced no scalar grid\n");
         return 1;
     }
 
-    MarchingCubesOptions marching_options;
-    marching_options.iso_value = 0.0;
-    const Mesh raw_mesh = marching_cubes(poisson_surface, marching_options);
+    const Mesh raw_mesh = marching_cubes(poisson_surface, defaults.marching_cubes);
     if (raw_mesh.vertices.empty() || raw_mesh.indices.empty()) {
         std::fprintf(stderr, "Marching cubes produced an empty mesh\n");
         return 1;
     }
 
-    SupportTrimmingOptions trimming_options;
-    trimming_options.enabled = true;
-    trimming_options.minimum_neighbors = 2;             // keep the neighborhood check
-    trimming_options.minimum_normal_alignment = 0.0;  // or 0.0 if you want to preserve topology
-    trimming_options.support_radius = 0.8;
-    trimming_options.max_normal_offset = 0.25;
-
     SupportTrimmingDiagnostics diagnostics;
     const Mesh trimmed_mesh =
-        support_trimming(raw_mesh, samples, trimming_options, &diagnostics);
+        support_trimming(raw_mesh, samples, defaults.trimming, &diagnostics);
     if (trimmed_mesh.vertices.empty() ||
         trimmed_mesh.indices.empty() ||
         trimmed_mesh.normals.size() != trimmed_mesh.vertices.size() ||

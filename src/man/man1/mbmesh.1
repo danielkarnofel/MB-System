@@ -32,21 +32,25 @@ is supplied as the first non-option argument.
 .TP
 .B \-O\fI outputdir\fR, \fB--output\fR \fIoutputdir\fR
 Output directory for generated files. The directory is created if needed.
-The default is \fIoutput\fR.
+The default is \fImbmesh_output\fR.
 .TP
 .B \-R\fI west/east/south/north\fR, \fB--bounds\fR \fIwest/east/south/north\fR
 Restrict accepted soundings to a geographic bounding box in degrees longitude
 and latitude.
 .TP
 .B \-L\fI meters\fR, \fB--lod\fR \fImeters\fR, \fB--level-of-detail\fR \fImeters\fR
-Requested smallest feature size in local meters. The implementation clamps this
-value to a supported range and uses it to derive default normal-estimation,
-Poisson, and trimming parameters.
+Requested smallest feature size in local meters. If omitted, \fBmbmesh\fR
+derives level of detail from estimated point spacing. The implementation clamps
+the resolved value to a supported range and uses it to derive default
+normal-estimation, Poisson, and trimming parameters.
+.TP
+.B \--decimate \fImeters\fR
+Enable voxel-grid point decimation with the specified cell size in local meters.
+The legacy single-dash form \fB-decimate\fR is also accepted.
 .TP
 .B \--metadata, \--info
 Print dataset metadata and exit before mesh reconstruction. The metadata
-includes input counts, geodetic bounds, estimated point spacing, and derived
-reconstruction settings.
+includes input counts, geodetic bounds, and estimated point spacing.
 .TP
 .B \-V, \--verbose
 Enable progress and diagnostic logging.

@@ -28,13 +28,15 @@ struct Options {
     bool write_raw_mesh_glb = false;
 
     std::filesystem::path input_datalist;
-    std::filesystem::path output_directory = "output";
+    std::filesystem::path output_directory = "mbmesh_output";
 
     bool use_bounds = false;
     GeographicBounds bounds;
 
     // Smallest feature size, in local meters, that mbmesh should try to preserve.
-    double level_of_detail = 0.1;
+    double level_of_detail = 0.5;
+    bool level_of_detail_requested = false;
+    bool decimation_requested = false;
 
     PointDecimationOptions decimation;
     NormalEstimationOptions normals;
@@ -71,6 +73,9 @@ struct PreprocessedDatalist {
     DatalistReadResult read_result;
     DatalistMetadata metadata;
 };
+
+void apply_spacing_driven_defaults(Options &options, DatalistMetadata *metadata);
+bool adjust_poisson_grid_to_budget(Options &options, const DatalistMetadata &metadata, std::string *error = nullptr);
 
 bool preprocess_datalist(
     Options &options,

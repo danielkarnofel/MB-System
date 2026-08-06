@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <getopt.h>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <system_error>
 #include <utility>
@@ -26,6 +27,25 @@
 Options parse_options(int argc, char **argv);
 
 void print_usage();
+
+namespace {
+
+void log_message(const std::string &stage, const std::string &message, bool verbose, bool always_print = false) {
+    if (!verbose && !always_print) {
+        return;
+    }
+    std::cerr << "mbmesh: [" << stage << "] " << message << '\n';
+}
+
+void log_warning(const std::string &message) {
+    std::cerr << "mbmesh: [warning] " << message << '\n';
+}
+
+void log_fatal(const std::string &message) {
+    std::cerr << "mbmesh: [fatal] " << message << '\n';
+}
+
+} // namespace
 
 bool write_outputs(
     const Mesh &mesh,
@@ -52,29 +72,30 @@ int main(int argc, char **argv) {
         return 0;
     }
 
+    log_message("startup",
+                "input=" + options.input_datalist.string() + " output=" + options.output_directory.string(),
+                options.verbose,
+                true);
+
     if (options.input_datalist.empty()) {
-        std::cerr << "mbmesh: input datalist path is empty; use -I <path>\n";
+        log_fatal("input datalist path is empty; use -I <path>");
         return 1;
     }
 
-    if (options.verbose) {
-        std::cerr << "mbmesh: Reading datalist: " << options.input_datalist << '\n';
-    }
+    log_message("input", "reading datalist " + options.input_datalist.string(), options.verbose);
 
     std::string error;
     PreprocessedDatalist preprocessed;
     if (!preprocess_datalist(options, &preprocessed, &error)) {
-        std::cerr << "mbmesh: " << error << '\n';
+        log_fatal(error);
         return 1;
     }
 
-    if (options.verbose) {
-        std::cerr << "mbmesh: [input] completed: accepted "
-                  << preprocessed.read_result.points.size()
-                  << " of " << preprocessed.read_result.stats.soundings_read
-                  << " soundings from " << preprocessed.read_result.stats.files_read
-                  << " files\n";
-    }
+    log_message("input", "completed: accepted " + std::to_string(preprocessed.read_result.points.size()) +
+                              " of " + std::to_string(preprocessed.read_result.stats.soundings_read) +
+                              " soundings from " + std::to_string(preprocessed.read_result.stats.files_read) +
+                              " files",
+                options.verbose);
 
     if (options.metadata_requested) {
         print_datalist_metadata(preprocessed, options);
@@ -93,25 +114,23 @@ int main(int argc, char **argv) {
 
     if (options.decimation.decimate) {
 
-        if (options.verbose) {
-            std::cerr << "mbmesh: [decimation] starting: cell_size=" << options.decimation.cell_size << '\n';
-        }
+        log_message("decimation", "starting: cell_size=" + std::to_string(options.decimation.cell_size), options.verbose);
 
         decimated_points = point_decimation(std::move(collected_points), options.decimation);
-        
+
         if (decimated_points.empty()) {
-            std::cerr << "mbmesh: point decimation produced no samples\n";
+            log_fatal("point decimation produced no samples");
             return 1;
         }
-        if (options.verbose) {
-            std::cerr << "mbmesh: [decimation] completed: retained " << decimated_points.size() << " of " << input_sample_count << " samples\n";
-        }
+        log_message("decimation",
+                    "completed: retained " + std::to_string(decimated_points.size()) + " of " +
+                        std::to_string(input_sample_count) + " samples",
+                    options.verbose);
 
     } else {
-
-        if (options.verbose) {
-            std::cerr << "mbmesh: [decimation] disabled; using " << input_sample_count << " input samples\n";
-        }
+        log_message("decimation",
+                    "disabled; using " + std::to_string(input_sample_count) + " input samples",
+                    options.verbose);
         decimated_points = std::move(collected_points);
     }
 
@@ -121,68 +140,72 @@ int main(int argc, char **argv) {
 
     if (options.verbose) {
         const bool using_search_radius = options.normals.search_radius > 0.0;
-        std::cerr << "mbmesh: [normal estimation] starting: "
-                  << "search_radius=" << options.normals.search_radius
-                  << ", radius_mode=" << (using_search_radius ? "enabled" : "disabled")
-                  << ", k_nearest=" << options.normals.k
-                  << ", fallback_min_neighbors=" << options.normals.minimum_neighbors
-                  << ", fallback_to_knearest=" << (using_search_radius ? "when radius neighborhood < minimum_neighbors" : "always")
-                  << '\n';
+        std::ostringstream verbose_message;
+        verbose_message << "starting: search_radius=" << options.normals.search_radius
+                        << ", radius_mode=" << (using_search_radius ? "enabled" : "disabled")
+                        << ", k_nearest=" << options.normals.k
+                        << ", fallback_min_neighbors=" << options.normals.minimum_neighbors
+                        << ", fallback_to_knearest="
+                        << (using_search_radius ? "when radius neighborhood < minimum_neighbors" : "always");
+        log_message("normal-estimation", verbose_message.str(), options.verbose);
     }
 
     OrientedPointCloud oriented_points = normal_estimation(decimated_points, options.normals);
 
     if (oriented_points.empty()) {
-        std::cerr << "mbmesh: normal estimation produced no oriented samples\n";
+        log_fatal("normal estimation produced no oriented samples");
         return 1;
     }
-    if (options.verbose) {
-        std::cerr << "mbmesh: [normal estimation] completed: oriented " << oriented_points.size() << " samples\n";
-    }
+    log_message("normal-estimation",
+                "completed: oriented " + std::to_string(oriented_points.size()) + " samples",
+                options.verbose);
 
     // ====================================================================================================
     // Screened Poisson
     // ====================================================================================================
 
     if (options.verbose) {
-        std::cerr << "mbmesh: [screened Poisson] starting... "
-                  << "\n\tcell_size: " << options.poisson.cell_size
-                  << "\n\tpadding: " << options.poisson.padding
-                  << "\n\tsplat_radius: " << options.poisson.normal_splat_radius
-                  << "\n\titerations: " << options.poisson.solver_iterations
-                  << "\n\tscreening: " << (options.poisson.use_screening ? "enabled" : "disabled")
-                  << "\n\tscreening_weight: " << options.poisson.screening_weight << "\n";
+        std::ostringstream verbose_message;
+        verbose_message << "starting: cell_size=" << options.poisson.cell_size
+                        << ", padding=" << options.poisson.padding
+                        << ", splat_radius=" << options.poisson.normal_splat_radius
+                        << ", iterations=" << options.poisson.solver_iterations
+                        << ", screening=" << (options.poisson.use_screening ? "enabled" : "disabled")
+                        << ", screening_weight=" << options.poisson.screening_weight;
+        log_message("poisson", verbose_message.str(), options.verbose);
     }
 
     ScalarGrid3D poisson_surface = screened_poisson(oriented_points, options.poisson);
 
     if (poisson_surface.values.empty()) {
-        std::cerr << "mbmesh: screened Poisson reconstruction produced an empty field\n";
+        log_fatal("screened Poisson reconstruction produced an empty field");
         return 1;
     }
 
-    if (options.verbose) {
-        std::cerr << "mbmesh: [screened Poisson] completed: grid = " << poisson_surface.nx << 'x' << poisson_surface.ny << 'x' << poisson_surface.nz << '\n';
-    }
+    log_message("poisson",
+                "completed: grid=" + std::to_string(poisson_surface.nx) + "x" +
+                    std::to_string(poisson_surface.ny) + "x" + std::to_string(poisson_surface.nz),
+                options.verbose);
 
     // ====================================================================================================
     // Marching Cubes
     // ====================================================================================================
 
-    if (options.verbose) {
-        std::cerr << "mbmesh: [marching cubes] starting: iso_value=" << options.marching_cubes.iso_value << '\n';
-    }
+    log_message("marching-cubes",
+                "starting: iso_value=" + std::to_string(options.marching_cubes.iso_value),
+                options.verbose);
 
     Mesh raw_mesh = marching_cubes(poisson_surface, options.marching_cubes);
 
     if (raw_mesh.vertices.empty() || raw_mesh.indices.empty()) {
-        std::cerr << "mbmesh: marching cubes produced an empty mesh\n";
+        log_fatal("marching cubes produced an empty mesh");
         return 1;
     }
 
-    if (options.verbose) {
-        std::cerr << "mbmesh: [marching cubes] completed: " << raw_mesh.vertices.size() << " vertices, " << raw_mesh.indices.size() / 3 << " triangles\n";
-    }
+    log_message("marching-cubes",
+                "completed: " + std::to_string(raw_mesh.vertices.size()) + " vertices, " +
+                    std::to_string(raw_mesh.indices.size() / 3) + " triangles",
+                options.verbose);
 
     // ====================================================================================================
     // Support Trimming
@@ -193,57 +216,59 @@ int main(int argc, char **argv) {
     SupportTrimmingDiagnostics trimming_diagnostics;
 
     if (options.trimming.enabled) {
-
         if (options.verbose) {
-            std::cerr << "mbmesh: [support trimming] starting... "
-                      << "\n\tradius: " << ((options.trimming.support_radius > 0.0) ? std::to_string(options.trimming.support_radius) : "auto")
-                      << "\n\tnormal_offset: " << ((options.trimming.max_normal_offset > 0.0) ? std::to_string(options.trimming.max_normal_offset) : "auto")
-                      << "\n\tminimum_neighbors: " << options.trimming.minimum_neighbors
-                      << "\n\tminimum_normal_alignment: " << ((options.trimming.minimum_normal_alignment > 0.0) ? std::to_string(options.trimming.minimum_normal_alignment) : "disabled");
+            std::ostringstream verbose_message;
+            verbose_message << "starting: radius="
+                            << ((options.trimming.support_radius > 0.0) ? std::to_string(options.trimming.support_radius) : "auto")
+                            << ", normal_offset="
+                            << ((options.trimming.max_normal_offset > 0.0) ? std::to_string(options.trimming.max_normal_offset) : "auto")
+                            << ", minimum_neighbors=" << options.trimming.minimum_neighbors
+                            << ", minimum_normal_alignment="
+                            << ((options.trimming.minimum_normal_alignment > 0.0) ? std::to_string(options.trimming.minimum_normal_alignment) : "disabled");
+            log_message("support-trimming", verbose_message.str(), options.verbose);
         }
         clean_mesh = support_trimming(raw_mesh, oriented_points, options.trimming, &trimming_diagnostics);
-
     } else {
-
-        if (options.verbose) {
-            std::cerr << "mbmesh: [support trimming] disabled; using raw mesh\n";
-        }
+        log_message("support-trimming", "disabled; using raw mesh", options.verbose);
         clean_mesh = raw_mesh;
     }
 
     if (clean_mesh.vertices.empty() || clean_mesh.indices.empty()) {
-        std::cerr << "mbmesh: support trimming removed the entire mesh. Adjust the trimming thresholds or disable trimming\n";
+        log_fatal("support trimming removed the entire mesh; adjust the trimming thresholds or disable trimming");
         return 1;
     }
 
     if (options.verbose && options.trimming.enabled) {
-        std::cerr << "mbmesh: [support trimming] completed."
-                  << "\n\tspacing: " << trimming_diagnostics.estimated_point_spacing
-                  << "\n\tresolved_radius: " << trimming_diagnostics.resolved_support_radius
-                  << "\n\tresolved_normal_offset: " << trimming_diagnostics.resolved_max_normal_offset
-                  << "\n\tsupported_vertices: " << trimming_diagnostics.supported_vertices << '/' << trimming_diagnostics.input_vertices
-                  << "\n\trejected: (neighbors = " << trimming_diagnostics.rejected_for_neighbors << ", offset = " << trimming_diagnostics.rejected_for_normal_offset << ", alignment = " << trimming_diagnostics.rejected_for_normal_alignment << ")"
-                  << "\n\toutput: " << clean_mesh.vertices.size() << " vertices, " << clean_mesh.indices.size() / 3 << " triangles\n";
+        std::ostringstream verbose_message;
+        verbose_message << "completed: spacing=" << trimming_diagnostics.estimated_point_spacing
+                        << ", resolved_radius=" << trimming_diagnostics.resolved_support_radius
+                        << ", resolved_normal_offset=" << trimming_diagnostics.resolved_max_normal_offset
+                        << ", supported_vertices=" << trimming_diagnostics.supported_vertices << '/' << trimming_diagnostics.input_vertices
+                        << ", rejected=(neighbors=" << trimming_diagnostics.rejected_for_neighbors
+                        << ", offset=" << trimming_diagnostics.rejected_for_normal_offset
+                        << ", alignment=" << trimming_diagnostics.rejected_for_normal_alignment << ")"
+                        << ", output=" << clean_mesh.vertices.size() << " vertices, "
+                        << clean_mesh.indices.size() / 3 << " triangles";
+        log_message("support-trimming", verbose_message.str(), options.verbose);
     }
 
     // ====================================================================================================
     // Write Outputs
     // ====================================================================================================
 
-    // Write desired output files:
     if (options.verbose) {
-        std::cerr << "mbmesh: [output] starting..."
-                  << "\n\tdirectory: " << options.output_directory
-                  << "\n\tglb: enabled"
-                  << "\n\thtml: " << (options.write_html ? "enabled" : "disabled")
-                  << "\n\tlocal_xyz: " << (options.write_local_xyz ? "enabled" : "disabled")
-                  << "\n\tecef_xyz: " << (options.write_ecef_xyz ? "enabled" : "disabled")
-                  << "\n\toriented_ply: " << (options.write_oriented_ply ? "enabled" : "disabled")
-                  << "\n\tpointcloud_glb: " << (options.write_pointcloud_glb ? "enabled" : "disabled")
-                  << "\n\tnormal_glb: " << (options.write_normal_glb ? "enabled" : "disabled")
-                  << "\n\torigin_glb: " << (options.write_origin_glb ? "enabled" : "disabled")
-                  << "\n\traw_mesh_glb: " << (options.write_raw_mesh_glb ? "enabled" : "disabled")
-                  << '\n';
+        std::ostringstream verbose_message;
+        verbose_message << "starting: directory=" << options.output_directory
+                        << ", glb=enabled"
+                        << ", html=" << (options.write_html ? "enabled" : "disabled")
+                        << ", local_xyz=" << (options.write_local_xyz ? "enabled" : "disabled")
+                        << ", ecef_xyz=" << (options.write_ecef_xyz ? "enabled" : "disabled")
+                        << ", oriented_ply=" << (options.write_oriented_ply ? "enabled" : "disabled")
+                        << ", pointcloud_glb=" << (options.write_pointcloud_glb ? "enabled" : "disabled")
+                        << ", normal_glb=" << (options.write_normal_glb ? "enabled" : "disabled")
+                        << ", origin_glb=" << (options.write_origin_glb ? "enabled" : "disabled")
+                        << ", raw_mesh_glb=" << (options.write_raw_mesh_glb ? "enabled" : "disabled");
+        log_message("output", verbose_message.str(), options.verbose);
     }
 
     PointCloud output_points;
@@ -253,20 +278,19 @@ int main(int argc, char **argv) {
     }
 
     if (!write_outputs(clean_mesh, raw_mesh, output_points, oriented_points, decimated_points, preprocessed.read_result.frame, options, &error)) {
-        std::cerr << "mbmesh: " << error << '\n';
+        log_fatal(error);
         return 1;
     }
 
-    if (options.verbose) {
-        std::cerr << "mbmesh: [output] completed\n";
-    }
+    log_message("output", "completed", options.verbose);
+    log_message("complete", "wrote " + (options.output_directory / "mesh.glb").string(), options.verbose, true);
 
     // ====================================================================================================
     // Launch Local Server for X3DOM Viewer
     // ====================================================================================================
 
     if (options.write_html && !launch_html_viewer_server(options.output_directory, "mesh.html")) {
-        std::cerr << "mbmesh: warning: failed to auto-launch Python web server/viewer\n";
+        log_warning("failed to auto-launch Python web server/viewer");
     }
 
     return 0;
@@ -293,6 +317,7 @@ Options parse_options(int argc, char **argv) {
         {"-normal-glb", "--normal-glb"},
         {"-origin-glb", "--origin-glb"},
         {"-raw-mesh-glb", "--raw-mesh-glb"},
+        {"-decimate", "--decimate"},
         {"-diagnostics", "--diagnostics"},
         {"-all-outputs", "--all-outputs"},
     };
@@ -323,8 +348,9 @@ Options parse_options(int argc, char **argv) {
         {"normal-glb", no_argument, nullptr, 1007},
         {"origin-glb", no_argument, nullptr, 1008},
         {"raw-mesh-glb", no_argument, nullptr, 1009},
-        {"diagnostics", no_argument, nullptr, 1010},
-        {"all-outputs", no_argument, nullptr, 1011},
+        {"decimate", required_argument, nullptr, 1010},
+        {"diagnostics", no_argument, nullptr, 1011},
+        {"all-outputs", no_argument, nullptr, 1012},
         {"verbose", no_argument, nullptr, 'V'},
         {"help", no_argument, nullptr, 'H'},
         {nullptr, 0, nullptr, 0},
@@ -353,13 +379,14 @@ Options parse_options(int argc, char **argv) {
                 options.bounds.degrees_N = north;
                 options.use_bounds = true;
             } else {
-                std::cerr << "mbmesh: invalid bounds argument: " << optarg << '\n';
+                log_warning("invalid bounds argument: " + std::string(optarg));
             }
             break;
         }
 
         case 'L':
             options.level_of_detail = std::strtod(optarg, nullptr);
+            options.level_of_detail_requested = true;
             break;
 
         case 'V':
@@ -408,12 +435,18 @@ Options parse_options(int argc, char **argv) {
             break;
 
         case 1010:
+            options.decimation.decimate = true;
+            options.decimation.cell_size = std::strtod(optarg, nullptr);
+            options.decimation_requested = true;
+            break;
+
+        case 1011:
             options.write_pointcloud_glb = true;
             options.write_normal_glb = true;
             options.write_origin_glb = true;
             break;
 
-        case 1011:
+        case 1012:
             options.write_html = true;
             options.write_local_xyz = true;
             options.write_ecef_xyz = true;
@@ -447,9 +480,10 @@ void print_usage() {
     std::cout << "Required:\n";
     std::cout << "  -I, --input <datalist>       Input MB-System datalist file\n\n";
     std::cout << "Optional:\n";
-    std::cout << "  -O, --output <outputdir>     Output directory [output]\n";
+    std::cout << "  -O, --output <outputdir>     Output directory [mbmesh_output]\n";
     std::cout << "  -R, --bounds <w/e/s/n>       Geographic bounds in degrees\n";
-    std::cout << "  -L, --lod <meters>           Requested smallest feature size [0.1]\n";
+    std::cout << "  -L, --lod <meters>           Requested smallest feature size; auto if omitted\n";
+    std::cout << "      --decimate <meters>      Enable voxel-grid point decimation\n";
     std::cout << "      --metadata, --info       Print dataset metadata and exit\n";
     std::cout << "  -V, --verbose                Enable progress and diagnostic logging\n";
     std::cout << "  -H, -h, --help               Print this help message\n\n";
@@ -522,9 +556,7 @@ bool write_outputs(
         if (!write_ecef_xyz_pointcloud(points, frame, ecef_xyz_path.string(), error)) {
             return false;
         }
-        if (options.verbose) {
-            std::cerr << "mbmesh: [output] wrote " << ecef_xyz_path << '\n';
-        }
+        log_message("output", "wrote " + ecef_xyz_path.string(), options.verbose);
     }
 
     if (options.write_local_xyz) {
@@ -532,9 +564,7 @@ bool write_outputs(
         if (!write_local_xyz_pointcloud(points, local_xyz_path.string(), error)) {
             return false;
         }
-        if (options.verbose) {
-            std::cerr << "mbmesh: [output] wrote " << local_xyz_path << '\n';
-        }
+        log_message("output", "wrote " + local_xyz_path.string(), options.verbose);
     }
 
     if (options.write_oriented_ply) {
@@ -542,9 +572,7 @@ bool write_outputs(
         if (!write_ply_oriented_pointcloud(oriented_points, frame, oriented_ply_path.string(), error)) {
             return false;
         }
-        if (options.verbose) {
-            std::cerr << "mbmesh: [output] wrote " << oriented_ply_path << '\n';
-        }
+        log_message("output", "wrote " + oriented_ply_path.string(), options.verbose);
     }
 
     if (options.write_pointcloud_glb) {
@@ -552,9 +580,7 @@ bool write_outputs(
         if (!write_pointcloud_glb_file(pointcloud_glb_path, points, error)) {
             return false;
         }
-        if (options.verbose) {
-            std::cerr << "mbmesh: [output] wrote " << pointcloud_glb_path << '\n';
-        }
+        log_message("output", "wrote " + pointcloud_glb_path.string(), options.verbose);
     }
 
     if (options.write_normal_glb) {
@@ -562,9 +588,7 @@ bool write_outputs(
         if (!write_normal_lines_glb_file(normals_glb_path, oriented_points, 0.25, error)) {
             return false;
         }
-        if (options.verbose) {
-            std::cerr << "mbmesh: [output] wrote " << normals_glb_path << '\n';
-        }
+        log_message("output", "wrote " + normals_glb_path.string(), options.verbose);
     }
 
     if (options.write_origin_glb) {
@@ -572,9 +596,7 @@ bool write_outputs(
         if (!write_origin_ray_lines_glb_file(origins_glb_path, collected_points, 0.25, error)) {
             return false;
         }
-        if (options.verbose) {
-            std::cerr << "mbmesh: [output] wrote " << origins_glb_path << '\n';
-        }
+        log_message("output", "wrote " + origins_glb_path.string(), options.verbose);
     }
 
     if (options.write_raw_mesh_glb) {
@@ -582,27 +604,21 @@ bool write_outputs(
         if (!write_mesh_glb_file(raw_mesh_glb_path, raw_mesh, error)) {
             return false;
         }
-        if (options.verbose) {
-            std::cerr << "mbmesh: [output] wrote " << raw_mesh_glb_path << '\n';
-        }
+        log_message("output", "wrote " + raw_mesh_glb_path.string(), options.verbose);
     }
 
     const auto clean_mesh_glb_path = options.output_directory / "mesh.glb";
     if (!write_mesh_glb_file(clean_mesh_glb_path, mesh, error)) {
         return false;
     }
-    if (options.verbose) {
-        std::cerr << "mbmesh: [output] wrote " << clean_mesh_glb_path << '\n';
-    }
+    log_message("output", "wrote " + clean_mesh_glb_path.string(), options.verbose);
 
     if (options.write_html) {
         const auto html_path = options.output_directory / "mesh.html";
         if (!write_glb_x3dom_file(html_path, "mesh.glb", {}, error)) {
             return false;
         }
-        if (options.verbose) {
-            std::cerr << "mbmesh: [output] wrote " << html_path << '\n';
-        }
+        log_message("output", "wrote " + html_path.string(), options.verbose);
     }
 
     return true;
@@ -641,7 +657,7 @@ bool launch_html_viewer_server(
         return false;
     }
 
-    std::cerr << "Started Python web server at " << url << '\n';
-    std::cerr << "Server logs: /tmp/mbmesh_http.log\n";
+    std::cerr << "mbmesh: [output] started Python web server at " << url << '\n';
+    std::cerr << "mbmesh: [output] server logs: /tmp/mbmesh_http.log\n";
     return true;
 }

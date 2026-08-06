@@ -7,13 +7,15 @@
 #include <iomanip>
 #include <iostream>
 #include <numeric>
+#include <sstream>
 #include <vector>
 
 namespace {
 
 constexpr double pi = 3.14159265358979323846;
-constexpr double minimum_feature_size = 0.10;
-constexpr double maximum_feature_size = 5.0;
+constexpr double minimum_feature_size = 0.01; // meters
+constexpr double maximum_feature_size = 5.0;  // meters
+constexpr double automatic_feature_size_spacing_scale = 2.0;
 constexpr double maximum_poisson_grid_cells = 45.0e6;
 constexpr std::size_t maximum_spacing_samples = 8192;
 
@@ -23,6 +25,8 @@ struct PoissonGridEstimate {
     std::size_t nz = 0;
     double cell_count = 0.0;
 };
+
+void apply_cell_size_dependent_defaults(Options &options, double cell_size, double average_spacing);
 
 Bounds3D collected_point_bounds(const CollectedPointCloud &points) {
     Bounds3D bounds(points.front().point, points.front().point);
@@ -131,40 +135,71 @@ PoissonGridEstimate estimate_poisson_grid(const Bounds3D &bounds, double cell_si
 }
 
 void apply_cell_size_dependent_defaults(Options &options, double cell_size, double average_spacing) {
-    options.poisson.cell_size = cell_size;
-    options.poisson.padding = std::clamp(4.0 * cell_size, 2.0 * cell_size, 5.0);
-    options.poisson.normal_splat_radius = std::max(1.5 * cell_size, 1.25 * average_spacing);
+    const double resolved_cell_size = std::max(cell_size, minimum_feature_size * 0.05);
 
-    options.trimming.support_radius = std::max(2.5 * cell_size, 2.0 * average_spacing);
-    options.trimming.max_normal_offset = std::max(1.5 * cell_size, average_spacing);
+    options.poisson.cell_size = resolved_cell_size;
+    options.poisson.padding = std::clamp(4.0 * resolved_cell_size, 2.0 * resolved_cell_size, 5.0);
+    options.poisson.normal_splat_radius = std::max(2.0 * resolved_cell_size, 1.5 * average_spacing);
+
+    options.trimming.support_radius = std::max(4.0 * resolved_cell_size, 2.5 * average_spacing);
+    options.trimming.max_normal_offset = std::max(2.0 * resolved_cell_size, 1.25 * average_spacing);
 }
 
+void print_warnings(const Options &options, const DatalistMetadata &metadata) {
+    if (!metadata.lod_supported_by_spacing) {
+        std::cerr << "mbmesh: [warning] resolved level_of_detail "
+                  << options.level_of_detail
+                  << " m is not supported by the estimated average point spacing "
+                  << metadata.spacing.average
+                  << " m; the result may be inaccurate\n";
+    }
+
+    if (metadata.normal_radius_exceeds_feature_limit) {
+        std::cerr << "mbmesh: [warning] normal estimation radius "
+                  << options.normals.search_radius
+                  << " m exceeds 45% of requested feature size "
+                  << options.level_of_detail
+                  << " m; normals may smooth features smaller than the radius\n";
+    }
+}
+
+} // namespace
+
 void apply_spacing_driven_defaults(Options &options, DatalistMetadata *metadata) {
-    const double desired_feature_size =
-        std::clamp(options.level_of_detail, minimum_feature_size, maximum_feature_size);
+    const double fallback_feature_size =
+        options.level_of_detail > vec3_epsilon ? options.level_of_detail : minimum_feature_size;
     const double average_spacing =
-        metadata->spacing.average > vec3_epsilon ? metadata->spacing.average : desired_feature_size;
+        metadata->spacing.average > vec3_epsilon ? metadata->spacing.average : fallback_feature_size;
+    const double desired_feature_size =
+        std::clamp(
+            options.level_of_detail_requested
+                ? options.level_of_detail
+                : automatic_feature_size_spacing_scale * average_spacing,
+            minimum_feature_size,
+            maximum_feature_size);
 
     options.level_of_detail = desired_feature_size;
 
-    options.decimation.decimate = false;
-    options.decimation.cell_size = std::max(0.5 * desired_feature_size, 0.5 * average_spacing);
+    if (!options.decimation_requested) {
+        options.decimation.decimate = false;
+        options.decimation.cell_size = std::max(0.5 * desired_feature_size, 0.5 * average_spacing);
+    }
 
     const double poisson_cell_size =
-        std::max(desired_feature_size / 4.0, average_spacing / 2.0);
+        std::clamp(desired_feature_size / 4.0, average_spacing / 2.0, average_spacing);
     apply_cell_size_dependent_defaults(options, poisson_cell_size, average_spacing);
 
     const double normal_radius =
-        std::max(2.5 * average_spacing, 2.0 * options.poisson.cell_size);
+        std::max(2.5 * average_spacing, 2.5 * options.poisson.cell_size);
     metadata->normal_radius_exceeds_feature_limit =
-        normal_radius > 0.45 * desired_feature_size;
+        normal_radius > desired_feature_size;
 
     options.normals.search_radius = normal_radius;
     options.normals.k = static_cast<std::size_t>(std::clamp(
         std::lround(pi * std::pow(normal_radius / average_spacing, 2.0)),
-        12L,
-        32L));
-    options.normals.minimum_neighbors = 3;
+        24L,
+        48L));
+    options.normals.minimum_neighbors = 6;
 
     options.poisson.screening_weight =
         std::clamp(4.0 * options.poisson.cell_size / average_spacing, 1.0, 6.0);
@@ -178,51 +213,29 @@ void apply_spacing_driven_defaults(Options &options, DatalistMetadata *metadata)
     options.marching_cubes.iso_value = 0.0;
 
     options.trimming.enabled = true;
-    options.trimming.minimum_neighbors = 2;
+    options.trimming.minimum_neighbors = 3;
     options.trimming.minimum_normal_alignment = 0.0;
 
     metadata->lod_supported_by_spacing =
-        desired_feature_size / average_spacing >= 2.5;
+        desired_feature_size / average_spacing >= automatic_feature_size_spacing_scale;
 }
 
-void adjust_poisson_grid_to_budget(Options &options, const DatalistMetadata &metadata) {
+bool adjust_poisson_grid_to_budget(Options &options, const DatalistMetadata &metadata, std::string *error) {
     PoissonGridEstimate estimate =
         estimate_poisson_grid(metadata.bounds, options.poisson.cell_size, options.poisson.padding);
     if (estimate.cell_count <= maximum_poisson_grid_cells) {
-        return;
+        return true;
     }
 
-    const double average_spacing =
-        metadata.spacing.average > vec3_epsilon ? metadata.spacing.average : options.level_of_detail;
-    double resolved_cell_size = options.poisson.cell_size;
-
-    for (int iteration = 0; iteration < 12 && estimate.cell_count > maximum_poisson_grid_cells; iteration++) {
-        const double scale = std::cbrt(estimate.cell_count / maximum_poisson_grid_cells);
-        resolved_cell_size *= std::max(1.05, scale * 1.02);
-        apply_cell_size_dependent_defaults(options, resolved_cell_size, average_spacing);
-        estimate = estimate_poisson_grid(metadata.bounds, options.poisson.cell_size, options.poisson.padding);
+    if (error != nullptr) {
+        std::ostringstream message;
+        message << "Poisson grid estimate " << estimate.cell_count << " cells exceeds the current budget "
+                << maximum_poisson_grid_cells << " at cell size " << options.poisson.cell_size
+                << " m; reduce the requested LOD or run the reconstruction with chunked/adaptive processing";
+        *error = message.str();
     }
+    return false;
 }
-
-void print_warnings(const Options &options, const DatalistMetadata &metadata) {
-    if (!metadata.lod_supported_by_spacing) {
-        std::cerr << "mbmesh: warning: requested level_of_detail "
-                  << options.level_of_detail
-                  << " m is not supported by the estimated average point spacing "
-                  << metadata.spacing.average
-                  << " m; the result may be inaccurate\n";
-    }
-
-    if (metadata.normal_radius_exceeds_feature_limit) {
-        std::cerr << "mbmesh: warning: normal estimation radius "
-                  << options.normals.search_radius
-                  << " m exceeds 45% of requested feature size "
-                  << options.level_of_detail
-                  << " m; normals may smooth features smaller than the radius\n";
-    }
-}
-
-} // namespace
 
 bool preprocess_datalist(Options &options, PreprocessedDatalist *preprocessed, std::string *error) {
     if (preprocessed == nullptr) {
@@ -254,7 +267,9 @@ bool preprocess_datalist(Options &options, PreprocessedDatalist *preprocessed, s
     preprocessed->metadata.spacing = estimate_point_spacing(preprocessed->read_result.points);
 
     apply_spacing_driven_defaults(options, &preprocessed->metadata);
-    adjust_poisson_grid_to_budget(options, preprocessed->metadata);
+    if (!adjust_poisson_grid_to_budget(options, preprocessed->metadata, error)) {
+        return false;
+    }
     print_warnings(options, preprocessed->metadata);
 
     return true;

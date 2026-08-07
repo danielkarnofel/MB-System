@@ -31,7 +31,7 @@ double sphere_sdf(double x, double y, double z) {
 double torus_sdf(double x, double y, double z) {
     constexpr double major_radius = 1.0;
     constexpr double minor_radius = 0.25;
-    const double radial_distance = std::sqrt(x * x + y * y); - major_radius;
+    const double radial_distance = std::sqrt(x * x + y * y) - major_radius;
     return std::sqrt(radial_distance * radial_distance + z * z) - minor_radius;
 }
 
